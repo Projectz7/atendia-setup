@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution123
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      AUTHENTICATION_API_KEY: atendia123
+      SERVER_URL: http://localhost:8080
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution123@postgres:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CORS_ORIGIN: "*"
+      CORS_METHODS: GET,POST,PUT,DELETE,OPTIONS
+      CORS_CREDENTIALS: "true"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  # ============================================================
+  # OLLAMA — escolha o profile conforme o hardware disponível:
+  #
+  #   CPU:           docker compose up -d
+  #   NVIDIA GPU:    docker compose --profile nvidia up -d
+  #   AMD GPU (Linux): docker compose --profile amd up -d
+  #
+  # Sem --profile, cai em CPU (sempre funciona, nada quebra).
+  # Os 3 variantes compartilham o mesmo volume (modelos baixados 1x).
+  # ============================================================
+  ollama:  # default — CPU
+    profiles: [""]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_FLASH_ATTENTION: "1"
+    networks:
+      default:
+        aliases:
+          - ollama
+
+  ollama-nvidia:  # NVIDIA CUDA Windows/Linux
+    profiles: ["nvidia"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_KEEP_ALIVE: "10m"
+    networks:
+      default:
+        aliases:
+          - ollama
+
+  ollama-amd:  # AMD ROCm (Linux only — Docker Desktop não passa GPU AMD no Windows)
+    profiles: ["amd"]
+    image: ollama/ollama:rocm
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_KEEP_ALIVE: "10m"
+    networks:
+      default:
+        aliases:
+          - ollama
+
+  tunnel-info:
+    build: ./tunnel-info
+    ports:
+      - "9876:9876"
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      EVO_URL: http://evolution:8080
+    depends_on:
+      - evolution
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  ollama_data:
+    external: true
+    name: atendia-tunnel_ollama_data
