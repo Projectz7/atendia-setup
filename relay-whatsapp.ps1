@@ -1,7 +1,7 @@
 # ============================================================
 # relay-whatsapp.ps1 — Bridge para Docker Local (Opcional)
 # ============================================================
-# SÓ e necessario se voce usa:
+# SO e necessario se voce usa:
 #   - Evolution API via Docker Local + tunnel Cloudflare
 #   - IA Ollama local (a edge function nao consegue chamar localhost)
 #
@@ -28,9 +28,10 @@ $submitResponseUrl = "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/submit-re
 $authHeader = @{ Authorization = "Bearer $RelaySecret" }
 
 $OllamaEndpoint = "http://localhost:9876/ollama"
-# Defaults — usados apenas se o webhook NÃO incluir config no payload
+# Defaults — usados apenas se o webhook NAO incluir config no payload
 $DefaultAiModel = "gemma3:4b"
 $DefaultSystemPrompt = "Voce e um atendente virtual de uma vidracaria. Responda de forma educada e profissional, em portugues. Seja breve e direto."
+$MaxRetries = 2
 
 try {
   $info = Invoke-WebRequest -Uri "http://localhost:9876/info" -UseBasicParsing -TimeoutSec 3
@@ -41,7 +42,6 @@ try {
     Invoke-WebRequest -Uri $updateTunnelUrl -Method POST -Headers $authHeader -Body $updateBody -TimeoutSec 10 | Out-Null
     Write-Host "[Relay] Integracao Ollama atualizada com tunnel URL" -ForegroundColor Green
 
-    # Atualiza evolution_config.server_url
     $evoUpdateUrl = "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-evolution"
     $evoBody = @{ server_url = "$($data.tunnel_url)/evolution" } | ConvertTo-Json -Depth 3
     try {
@@ -57,26 +57,50 @@ try {
   Write-Host "[Relay] Tunnel nao disponivel - usando Ollama local diretamente" -ForegroundColor Yellow
 }
 
+# ============================================================
+# Invoke-Ollama — chama Ollama com retry, encoding UTF-8
+# ============================================================
 function Invoke-Ollama {
-  param([string]$Endpoint, [string]$Model, [string]$System, [array]$Messages)
-  $body = @{
+  param(
+    [string]$Endpoint,
+    [string]$Model,
+    [string]$System,
+    [array]$Messages,
+    [int]$Attempt = 1
+  )
+  $timeout = if ($Attempt -eq 1) { 60 } else { 120 }
+  $bodyObj = @{
     model = $Model
     stream = $false
     think = $false
     messages = @(@{ role = "system"; content = $System }) + $Messages
     options = @{ num_predict = 200; temperature = 0.7 }
-  } | ConvertTo-Json -Depth 5
+  }
+  $bodyJson = $bodyObj | ConvertTo-Json -Depth 5
+  $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
+
   try {
     $res = Invoke-WebRequest -Uri "$Endpoint/api/chat" -Method POST `
-      -ContentType "application/json" -Body $body -UseBasicParsing -TimeoutSec 240
+      -ContentType "application/json; charset=utf-8" `
+      -Body $bodyBytes -UseBasicParsing -TimeoutSec $timeout
     if ($res.StatusCode -eq 200) {
       $data = $res.Content | ConvertFrom-Json
-      return $data.message.content
+      if ($data.message.content) {
+        return @{ ok = $true; content = $data.message.content }
+      }
+      return @{ ok = $false; error = "resposta vazia do Ollama" }
     }
+    return @{ ok = $false; error = "HTTP $($res.StatusCode)" }
   } catch {
-    Write-Host "[Relay] [!] Ollama erro: $_" -ForegroundColor Red
+    $errMsg = $_.Exception.Message
+    if ($errMsg -match "timed out|timeout") {
+      return @{ ok = $false; error = "timeout ${timeout}s" }
+    }
+    if ($errMsg -match "refused|connect") {
+      return @{ ok = $false; error = "conexao recusada" }
+    }
+    return @{ ok = $false; error = $errMsg }
   }
-  return $null
 }
 
 Write-Host "[Relay WhatsApp] Iniciado - polling a cada ${PollInterval}s"
@@ -129,16 +153,36 @@ while ($true) {
       }
     }
 
+    # ============================================================
+    # Processamento IA — 1 conversa por vez, 2 retries
+    # ============================================================
     try {
       $aiResp = Invoke-WebRequest -Uri $pendingAiUrl -Method GET -Headers $authHeader -TimeoutSec 10
       $pendingAi = $aiResp.Content | ConvertFrom-Json
       foreach ($item in $pendingAi) {
-        Write-Host "[Relay] [AI] Processando: $($item.cliente_nome) - $($item.mensagem.Substring(0, [Math]::Min(60, $item.mensagem.Length)))" -ForegroundColor Magenta
-        # Config por item — always use local Ollama endpoint (tunnel is unreliable from relay too)
+        $nome = if ($item.cliente_nome) { $item.cliente_nome } else { $item.whatsapp_numero }
+        $msgPreview = if ($item.mensagem) { $item.mensagem.Substring(0, [Math]::Min(60, $item.mensagem.Length)) } else { "?" }
+        Write-Host "[Relay] [AI] Processando: $nome - $msgPreview" -ForegroundColor Magenta
+
         $itemEndpoint = $OllamaEndpoint
         $itemModel = if ($item.modelo) { $item.modelo } else { $DefaultAiModel }
         $itemSystem = if ($item.system_prompt) { $item.system_prompt } else { $DefaultSystemPrompt }
-        $resposta = Invoke-Ollama -Endpoint $itemEndpoint -Model $itemModel -System $itemSystem -Messages $item.historico
+
+        $resposta = $null
+        $lastError = ""
+        for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+          $result = Invoke-Ollama -Endpoint $itemEndpoint -Model $itemModel -System $itemSystem -Messages $item.historico -Attempt $attempt
+          if ($result.ok) {
+            $resposta = $result.content
+            break
+          }
+          $lastError = $result.error
+          Write-Host "[Relay] [AI] Tentativa $attempt/$MaxRetries falhou ($lastError) - $nome" -ForegroundColor Yellow
+          if ($attempt -lt $MaxRetries) {
+            Start-Sleep -Seconds 3
+          }
+        }
+
         if ($resposta) {
           $submitBody = @{
             conversa_id = $item.conversa_id
@@ -148,9 +192,11 @@ while ($true) {
             trace_id = $item.trace_id
           } | ConvertTo-Json -Depth 3
           Invoke-WebRequest -Uri $submitResponseUrl -Method POST -Headers $authHeader -Body $submitBody -TimeoutSec 10 | Out-Null
-          Write-Host "[Relay] [AI] Resposta salva (trace=$($item.trace_id)): $($resposta.Substring(0, [Math]::Min(80, $resposta.Length)))" -ForegroundColor Green
+          $preview = $resposta.Substring(0, [Math]::Min(80, $resposta.Length))
+          Write-Host "[Relay] [AI] Resposta salva (trace=$($item.trace_id)): $preview" -ForegroundColor Green
         } else {
-          Write-Host "[Relay] [AI] Falha ao gerar resposta para $($item.cliente_nome)" -ForegroundColor Red
+          Write-Host "[Relay] [AI] FALHA FINAL apos $MaxRetries tentativas para $nome ($lastError)" -ForegroundColor Red
+          Write-Host "[Relay] [AI] Conversa $($item.conversa_id) sera processada manualmente" -ForegroundColor Red
         }
       }
     } catch {
