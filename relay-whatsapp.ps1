@@ -72,9 +72,7 @@ function Invoke-Ollama {
   $bodyObj = @{
     model = $Model
     stream = $false
-    think = $false
     messages = @(@{ role = "system"; content = $System }) + $Messages
-    options = @{ num_predict = 200; temperature = 0.7 }
   }
   $bodyJson = $bodyObj | ConvertTo-Json -Depth 5
   $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
@@ -168,10 +166,13 @@ while ($true) {
         $itemModel = if ($item.modelo) { $item.modelo } else { $DefaultAiModel }
         $itemSystem = if ($item.system_prompt) { $item.system_prompt } else { $DefaultSystemPrompt }
 
+        # Limitar historico a ultimas 5 mensagens — prioriza mensagem atual
+        $histLimited = if ($item.historico.Count -gt 5) { $item.historico[-5..-1] } else { $item.historico }
+
         $resposta = $null
         $lastError = ""
         for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
-          $result = Invoke-Ollama -Endpoint $itemEndpoint -Model $itemModel -System $itemSystem -Messages $item.historico -Attempt $attempt
+          $result = Invoke-Ollama -Endpoint $itemEndpoint -Model $itemModel -System $itemSystem -Messages $histLimited -Attempt $attempt
           if ($result.ok) {
             $resposta = $result.content
             break
