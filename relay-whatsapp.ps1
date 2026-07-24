@@ -198,9 +198,8 @@ while ($true) {
           $preview = $resposta.Substring(0, [Math]::Min(80, $resposta.Length))
           Write-Host "[Relay] [AI] Resposta salva (trace=$($item.trace_id)): $preview" -ForegroundColor Green
 
-          # Transferir para humano se a IA detectar intenção de compra
           $transferir = $false
-          $palavrasTransferencia = @("atendente humano", "transferir para", "vamos transferir", " Samuel", "encaminhar para", "dar continuidade")
+          $palavrasTransferencia = @("atendente humano", "transferir para", "vamos transferir", "Samuel", "encaminhar para", "dar continuidade")
           foreach ($p in $palavrasTransferencia) {
             if ($resposta -like "*$p*") { $transferir = $true; break }
           }
