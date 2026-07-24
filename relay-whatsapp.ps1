@@ -29,7 +29,7 @@ $authHeader = @{ Authorization = "Bearer $RelaySecret" }
 
 $OllamaEndpoint = "http://localhost:9876/ollama"
 # Defaults — usados apenas se o webhook NAO incluir config no payload
-$DefaultAiModel = "gemma3:4b"
+$DefaultAiModel = "qwen3.5:4b"
 $DefaultSystemPrompt = "Voce e um atendente virtual de uma vidracaria. Responda de forma educada e profissional, em portugues. Seja breve e direto."
 $MaxRetries = 2
 
