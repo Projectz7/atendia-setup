@@ -123,15 +123,16 @@ while ($true) {
 
         $localEvo = "http://localhost:8080"
         $sendUrl = "$localEvo/message/sendText/$($evo.instance_name)"
-        $evoAuth = @{ "Content-Type" = "application/json"; apiKey = $evo.api_key }
+        $evoAuth = @{ "Content-Type" = "application/json; charset=utf-8"; apiKey = $evo.api_key }
         $body = @{
           number  = $msg.whatsapp_numero
           text    = $msg.conteudo
           options = @{ delay = 1200 }
         } | ConvertTo-Json -Depth 3
+        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 
         try {
-          $sendResp = Invoke-WebRequest -Uri $sendUrl -Method POST -Headers $evoAuth -Body $body -TimeoutSec 15
+          $sendResp = Invoke-WebRequest -Uri $sendUrl -Method POST -Headers $evoAuth -Body $bodyBytes -TimeoutSec 15
           $ok = $sendResp.StatusCode -eq 200 -or $sendResp.StatusCode -eq 201
           if ($ok) {
             Write-Host "[Relay] [+] msg $($msg.id) enviada para $($msg.whatsapp_numero)"
@@ -192,9 +193,29 @@ while ($true) {
             whatsapp_numero = $item.whatsapp_numero
             trace_id = $item.trace_id
           } | ConvertTo-Json -Depth 3
-          Invoke-WebRequest -Uri $submitResponseUrl -Method POST -Headers $authHeader -Body $submitBody -TimeoutSec 10 | Out-Null
+          $submitBytes = [System.Text.Encoding]::UTF8.GetBytes($submitBody)
+          Invoke-WebRequest -Uri $submitResponseUrl -Method POST -Headers $authHeader -Body $submitBytes -TimeoutSec 10 | Out-Null
           $preview = $resposta.Substring(0, [Math]::Min(80, $resposta.Length))
           Write-Host "[Relay] [AI] Resposta salva (trace=$($item.trace_id)): $preview" -ForegroundColor Green
+
+          # Transferir para humano se a IA detectar intenção de compra
+          $transferir = $false
+          $palavrasTransferencia = @("atendente humano", "transferir para", "vamos transferir", " Samuel", "encaminhar para", "dar continuidade")
+          foreach ($p in $palavrasTransferencia) {
+            if ($resposta -like "*$p*") { $transferir = $true; break }
+          }
+          if ($transferir) {
+            $updateBody = @{ status = "humano" } | ConvertTo-Json -Depth 3
+            $updateBytes = [System.Text.Encoding]::UTF8.GetBytes($updateBody)
+            try {
+              $updateUrl = "$SupabaseUrl/rest/v1/conversas?id=eq.$($item.conversa_id)"
+              $updateHeaders = @{ "Content-Type" = "application/json"; "Authorization" = "Bearer $RelaySecret"; "apikey" = "$RelaySecret" }
+              Invoke-WebRequest -Uri $updateUrl -Method PATCH -Headers $updateHeaders -Body $updateBytes -TimeoutSec 10 | Out-Null
+              Write-Host "[Relay] [AI] Conversa transferida para HUMANO (intensao de compra detectada)" -ForegroundColor Yellow
+            } catch {
+              Write-Host "[Relay] [AI] Aviso: nao foi possivel mudar status para humano: $_" -ForegroundColor Yellow
+            }
+          }
         } else {
           Write-Host "[Relay] [AI] FALHA FINAL apos $MaxRetries tentativas para $nome ($lastError)" -ForegroundColor Red
           Write-Host "[Relay] [AI] Conversa $($item.conversa_id) sera processada manualmente" -ForegroundColor Red
