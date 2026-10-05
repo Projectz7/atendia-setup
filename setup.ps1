@@ -20,8 +20,12 @@ if ($Docker) {
 } else {
   Write-Host "Escolha como conectar o WhatsApp:" -ForegroundColor White
   Write-Host ""
-  Write-Host "  [1] Railway (Recomendado) -Deploy na nuvem, 1 click, URL fixa HTTPS" -ForegroundColor Green
-  Write-Host "      Facil, nao precisa deixar PC ligado, funciona no Vercel" -ForegroundColor Gray
+  Write-Host "  [1] Railway - Deploy na nuvem, 1 click (facil; PAGO apos o credito de teste)" -ForegroundColor Green
+  Write-Host "      Nao precisa deixar PC ligado, funciona no Vercel" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  [GRATIS] VM Oracle Always Free (sempre ligada, zero custo)" -ForegroundColor Cyan
+  Write-Host "      Veja os passos em P7Store > Configuracoes > WhatsApp > Modo 1" -ForegroundColor Gray
+  Write-Host "      (1 comando na VM: setup-linux.sh do repositorio atendia-setup)" -ForegroundColor Gray
   Write-Host ""
   Write-Host "  [2] Docker Local - Roda Evolution no seu PC (controle total)" -ForegroundColor Yellow
   Write-Host "      Precisa Docker + PC ligado + tunnel Cloudflare" -ForegroundColor Gray

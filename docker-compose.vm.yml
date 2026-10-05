@@ -1,0 +1,51 @@
+# Evolution API enxuta para VM na nuvem (Oracle Always Free, AWS free tier, GCP e2-micro, qualquer VPS).
+# Sem Ollama: a IA do ecossistema e cloud (NVIDIA / Gemini / OpenAI configuradas no P7Store).
+# Sessao WhatsApp persiste no volume pgdata_vm (nao precisa re-escanear QR apos restart).
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution123
+    volumes:
+      - pgdata_vm:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    ports:
+      - "127.0.0.1:8080:8080" # so localhost da VM — exposicao publica e via tunnel Cloudflare
+    environment:
+      AUTHENTICATION_API_KEY: atendia123
+      SERVER_URL: http://localhost:8080
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution123@postgres:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CORS_ORIGIN: "*"
+      CORS_METHODS: GET,POST,PUT,DELETE,OPTIONS
+      CORS_CREDENTIALS: "true"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  tunnel-info:
+    build: ./tunnel-info
+    ports:
+      - "127.0.0.1:9876:9876"
+    environment:
+      OLLAMA_URL: http://localhost:11434 # inexistente nesta stack (IA cloud) — so para compatibilidade
+      EVO_URL: http://evolution:8080
+    depends_on:
+      - evolution
+    restart: unless-stopped
+
+volumes:
+  pgdata_vm:
