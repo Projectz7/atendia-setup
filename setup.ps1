@@ -25,7 +25,7 @@ if ($Docker) {
   Write-Host ""
   Write-Host "  [GRATIS] VM Oracle Always Free (sempre ligada, zero custo)" -ForegroundColor Cyan
   Write-Host "      Veja os passos em P7Store > Configuracoes > WhatsApp > Modo 1" -ForegroundColor Gray
-  Write-Host "      (1 comando na VM: setup-linux.sh do repositorio atendia-setup)" -ForegroundColor Gray
+  Write-Host "      (1 comando na VM: setup-native.sh do repositorio atendia-setup - sem Docker)" -ForegroundColor Gray
   Write-Host ""
   Write-Host "  [2] Docker Local - Roda Evolution no seu PC (controle total)" -ForegroundColor Yellow
   Write-Host "      Precisa Docker + PC ligado + tunnel Cloudflare" -ForegroundColor Gray
