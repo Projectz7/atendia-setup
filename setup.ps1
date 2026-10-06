@@ -79,19 +79,27 @@ if ($choice -eq "1") {
 }
 
 # ==================== MODO DOCKER LOCAL ====================
+function Pausa([string]$msg) {
+  Write-Host ""
+  if ($msg) { Write-Host $msg -ForegroundColor White }
+  Read-Host "  Aperte ENTER para continuar" | Out-Null
+  Write-Host ""
+}
+
 Write-Host "[AtendIA] Modo Docker Local" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Assistente guiado - o que vai acontecer:" -ForegroundColor White
+Write-Host "  Assistente guiado - 5 passos. Eu aviso cada um:" -ForegroundColor White
 Write-Host "  [1/5] Verificar o Docker Desktop (pausa se precisar de voce)" -ForegroundColor Gray
 Write-Host "  [2/5] Baixar os arquivos (docker-compose + relay)" -ForegroundColor Gray
-Write-Host "  [3/5] Subir Evolution + Postgres + Redis + Ollama + Tunel" -ForegroundColor Gray
-Write-Host "  [4/5] Sincronizar as URLs com o app" -ForegroundColor Gray
-Write-Host "  [5/5] Resultado final com a Evolution URL" -ForegroundColor Gray
+Write-Host "  [3/5] Subir Evolution + Postgres + Redis + Tunel" -ForegroundColor Gray
+Write-Host "  [4/5] Baixar o modelo da IA (Ollama)" -ForegroundColor Gray
+Write-Host "  [5/5] Sincronizar as URLs com o app e mostrar o resultado" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  ANTES DE CONTINUAR:" -ForegroundColor White
-Write-Host "  -----------------------------------------------" -ForegroundColor Gray
-Write-Host "  Esse modo precisa do Docker Desktop instalado." -ForegroundColor White
-Write-Host "  Se ainda nao tem, baixe e instale:" -ForegroundColor White
+Write-Host "  IMPORTANTE: nao feche esta janela durante a instalacao." -ForegroundColor Yellow
+Write-Host ""
+
+# ---------- PASSO 1/5: Docker Desktop ----------
+Write-Host "  [1/5] Verificando o Docker Desktop..." -ForegroundColor Cyan
 
 if ($env:OS -eq "Windows_NT") {
   if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
@@ -108,49 +116,40 @@ if ($env:OS -eq "Windows_NT") {
   $DockerUrl = "https://docs.docker.com/desktop/install/linux-install/"
   $DockerLabel = "Linux"
 }
-Write-Host "  [Seu sistema: $DockerLabel]" -ForegroundColor Gray
-Write-Host "  $DockerUrl" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Apos instalar:" -ForegroundColor White
-Write-Host "  1. Abra o Docker Desktop (inicie pelo atalho)" -ForegroundColor Gray
-Write-Host "  2. Aceite os termos e aguarde ele iniciar" -ForegroundColor Gray
-Write-Host "  3. Volte aqui e pressione ENTER para continuar" -ForegroundColor Gray
-Write-Host "  4. Se preferir nuvem gratis (VM Oracle, PC desligado): P7Store > Configuracoes > WhatsApp > modo 1" -ForegroundColor Gray
-Write-Host "  -----------------------------------------------" -ForegroundColor Gray
-Write-Host ""
-pause
-Write-Host ""
-
-if (-not (Test-Path -LiteralPath $FolderName)) {
-  New-Item -ItemType Directory -Path $FolderName -Force | Out-Null
-  Write-Host "[AtendIA] Pasta '$FolderName' criada" -ForegroundColor Green
-} else {
-  Write-Host "[AtendIA] Pasta '$FolderName' existe - atualizando arquivos" -ForegroundColor Yellow
-}
-Set-Location -LiteralPath $FolderName
-
-Write-Host "[AtendIA] Baixando arquivos do GitHub..." -ForegroundColor Cyan
-Invoke-WebRequest -Uri "$RawBase/docker-compose.evolution.yml" -OutFile "docker-compose.evolution.yml" -UseBasicParsing | Out-Null
-if (-not (Test-Path -LiteralPath "tunnel-info")) { New-Item -ItemType Directory -Path "tunnel-info" -Force | Out-Null }
-Invoke-WebRequest -Uri "$RawBase/tunnel-info/Dockerfile" -OutFile "tunnel-info/Dockerfile" -UseBasicParsing | Out-Null
-Invoke-WebRequest -Uri "$RawBase/tunnel-info/server.py" -OutFile "tunnel-info/server.py" -UseBasicParsing | Out-Null
-Invoke-WebRequest -Uri "$RawBase/relay-whatsapp.ps1" -OutFile "relay-whatsapp.ps1" -UseBasicParsing | Out-Null
-Write-Host "[AtendIA] Arquivos atualizados" -ForegroundColor Green
 
 $dockerVer = docker --version 2>$null
-if (-not $dockerVer) {
-  Write-Host "[AtendIA] [ERRO] Docker nao encontrado." -ForegroundColor Red
-  Write-Host "[AtendIA] Baixe e instale o Docker Desktop:" -ForegroundColor Yellow
-  Write-Host "[AtendIA] [Seu sistema: $DockerLabel] $DockerUrl" -ForegroundColor Cyan
-  Write-Host "[AtendIA] Apos instalar, reinicie o PC, abra o Docker Desktop e aguarde ele iniciar." -ForegroundColor Yellow
-  Write-Host "[AtendIA] Depois volte aqui e pressione ENTER." -ForegroundColor Yellow
-  Write-Host "[AtendIA] Ou use o modo Railway (opcao 1) que nao precisa de Docker." -ForegroundColor Yellow
-  pause
-  exit 1
+if ($dockerVer) {
+  Write-Host "  [1/5] Docker ja instalado: $dockerVer" -ForegroundColor Green
+} else {
+  Write-Host "  [1/5] Docker Desktop nao encontrado. Sem problema - a gente instala agora." -ForegroundColor Yellow
+  Write-Host "  [Seu sistema: $DockerLabel]" -ForegroundColor Gray
+  $abrir = Read-Host "  Aperte ENTER para abrir a pagina de download no navegador (ou digite N para pular)"
+  if ($abrir -ne "N" -and $abrir -ne "n") { Start-Process $DockerUrl }
+  Write-Host ""
+  Write-Host "  Como instalar (so na primeira vez):" -ForegroundColor White
+  Write-Host "  1. Na pagina que abriu, baixe e instale o Docker Desktop (proximo-proximo-concluir)" -ForegroundColor Gray
+  Write-Host "  2. Se pedir para REINICIAR o PC, reinicie" -ForegroundColor Gray
+  Write-Host "  3. Depois, ABRA o Docker Desktop pelo icone e aguarde ele terminar de abrir" -ForegroundColor Gray
+  Write-Host "  4. Volte nesta janela e aperte ENTER - eu verifico sozinho" -ForegroundColor Gray
+  while (-not $dockerVer) {
+    Pausa "  Instalou e abriu o Docker Desktop? Volte aqui."
+    $dockerVer = docker --version 2>$null
+    if (-not $dockerVer) {
+      Write-Host "  [1/5] Ainda nao encontrei o Docker..." -ForegroundColor Yellow
+      Write-Host "  Confira se o Docker Desktop esta instalado e ABERTO (icone da baleia perto do relogio)." -ForegroundColor Gray
+      $desistir = Read-Host "  Aperte ENTER para tentar de novo (ou X para sair)"
+      if ($desistir -eq "X" -or $desistir -eq "x") {
+        Write-Host "  Instalacao interrompida. Nada foi alterado - rode este comando de novo quando quiser." -ForegroundColor Yellow
+        exit 1
+      }
+    }
+  }
+  Write-Host "  [1/5] Encontrei! $dockerVer" -ForegroundColor Green
 }
-Write-Host "[AtendIA] Docker: $dockerVer" -ForegroundColor Gray
 
-Write-Host "[AtendIA] Verificando Docker Desktop..." -ForegroundColor Cyan
+# Docker instalado - agora esperar o motor ligar
+Write-Host ""
+Write-Host "  [1/5] Verificando se o Docker esta em execucao..." -ForegroundColor Cyan
 $engineReady = $false
 while (-not $engineReady) {
   $info = docker info 2>&1
@@ -158,48 +157,58 @@ while (-not $engineReady) {
     $engineReady = $true
     break
   }
-  Write-Host ""
-  Write-Host "[AtendIA] Docker Desktop ainda esta iniciando..." -ForegroundColor Yellow
-  Write-Host "[AtendIA] Aguarde o icone verde na bandeja do sistema (canto inferior direito)." -ForegroundColor White
-  Write-Host "[AtendIA] Quando o Docker estiver verde, pressione ENTER." -ForegroundColor White
-  Write-Host ""
-  pause
-  Write-Host ""
-  Write-Host "[AtendIA] Verificando novamente..." -ForegroundColor Cyan
+  Write-Host "  [1/5] O Docker Desktop ainda esta iniciando (icone da baleia na bandeja, canto inferior direito)." -ForegroundColor Yellow
+  Pausa "  Quando o Docker estiver aberto e sem erro, volte aqui."
+  Write-Host "  [1/5] Verificando novamente..." -ForegroundColor Cyan
 }
-Write-Host "[AtendIA] Docker engine pronto! Aguardando estabilizar..." -ForegroundColor Green
+Write-Host "  [1/5] OK! Docker pronto ($dockerVer)" -ForegroundColor Green
 Start-Sleep -Seconds 5
 
-# === LIMPEZA DE CONFIGURACAO ANTERIOR ===
-Write-Host "[AtendIA] Limpando containers antigos..." -ForegroundColor Cyan
+# ---------- PASSO 2/5: arquivos ----------
+Write-Host ""
+Write-Host "  [2/5] Baixando os arquivos (rapido, ~10 segundos)..." -ForegroundColor Cyan
+if (-not (Test-Path -LiteralPath $FolderName)) {
+  New-Item -ItemType Directory -Path $FolderName -Force | Out-Null
+  Write-Host "  [2/5] Pasta '$FolderName' criada" -ForegroundColor Green
+} else {
+  Write-Host "  [2/5] Pasta '$FolderName' ja existe - atualizando arquivos" -ForegroundColor Yellow
+}
+Set-Location -LiteralPath $FolderName
 
-# Para e remove containers antigos do compose (se existir)
+Invoke-WebRequest -Uri "$RawBase/docker-compose.evolution.yml" -OutFile "docker-compose.evolution.yml" -UseBasicParsing | Out-Null
+if (-not (Test-Path -LiteralPath "tunnel-info")) { New-Item -ItemType Directory -Path "tunnel-info" -Force | Out-Null }
+Invoke-WebRequest -Uri "$RawBase/tunnel-info/Dockerfile" -OutFile "tunnel-info/Dockerfile" -UseBasicParsing | Out-Null
+Invoke-WebRequest -Uri "$RawBase/tunnel-info/server.py" -OutFile "tunnel-info/server.py" -UseBasicParsing | Out-Null
+Invoke-WebRequest -Uri "$RawBase/relay-whatsapp.ps1" -OutFile "relay-whatsapp.ps1" -UseBasicParsing | Out-Null
+Write-Host "  [2/5] OK! Arquivos prontos" -ForegroundColor Green
+
+# ---------- PASSO 3/5: containers ----------
+Write-Host ""
+Write-Host "  [3/5] Limpando instalacao anterior (se houver)..." -ForegroundColor Cyan
+
 if (Test-Path -LiteralPath "docker-compose.evolution.yml") {
   docker compose -f docker-compose.evolution.yml down --remove-orphans 2>$null
-  Write-Host "[AtendIA] Containers antigos removidos" -ForegroundColor Gray
 }
 
-# Matar qualquer container ocupando porta 8080 (Evolution antiga de outro projeto)
 $port8080 = docker ps --filter "publish=8080" --format "{{.ID}}" 2>$null
 if ($port8080) {
-  Write-Host "[AtendIA] Removendo containers na porta 8080..." -ForegroundColor Yellow
+  Write-Host "  [3/5] Removendo containers na porta 8080..." -ForegroundColor Yellow
   $port8080 | ForEach-Object { docker stop $_ 2>$null; docker rm $_ 2>$null }
 }
 
-# Tambem remover containers com nome atendia (de instalacoes anteriores)
 $oldContainers = docker ps -a --filter "name=atendia" --format "{{.ID}}" 2>$null
 if ($oldContainers) {
-  Write-Host "[AtendIA] Removendo containers atendia antigos..." -ForegroundColor Yellow
+  Write-Host "  [3/5] Removendo containers atendia antigos..." -ForegroundColor Yellow
   $oldContainers | ForEach-Object { docker stop $_ 2>$null; docker rm $_ 2>$null }
 }
 
 if ($Clean) {
-  Write-Host "[AtendIA] Modo -Clean: removendo volumes (wipe total)..." -ForegroundColor Yellow
+  Write-Host "  [3/5] Modo -Clean: removendo volumes (wipe total)..." -ForegroundColor Yellow
   docker compose -f docker-compose.evolution.yml down --volumes --remove-orphans 2>$null
   docker volume ls --filter "name=atendia" --format "{{.Name}}" 2>$null | ForEach-Object { docker volume rm $_ 2>$null }
-  Write-Host "[AtendIA] Volumes removidos (modelos Ollama e dados DB)" -ForegroundColor Gray
+  Write-Host "  [3/5] Volumes removidos (modelos Ollama e dados DB)" -ForegroundColor Gray
 } else {
-  Write-Host "[AtendIA] Volumes preservados (sessao WhatsApp + modelo Ollama mantidos)" -ForegroundColor Green
+  Write-Host "  [3/5] Volumes preservados (sessao WhatsApp + modelo Ollama mantidos)" -ForegroundColor Green
 }
 
 # Resetar evolution_config.server_url no Supabase (evitar URL fantasma de tunnel morto)
@@ -208,67 +217,101 @@ $authHeader = @{ Authorization = "Bearer $relaySecret"; "Content-Type" = "applic
 try {
   $resetBody = @{ server_url = "" } | ConvertTo-Json -Depth 3
   Invoke-WebRequest -Uri "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-evolution" -Method POST -Headers $authHeader -Body $resetBody -UseBasicParsing -TimeoutSec 10 | Out-Null
-  Write-Host "[AtendIA] evolution_config.server_url resetado (URL fantasma limpa)" -ForegroundColor Green
-} catch { Write-Host "[AtendIA] Aviso reset server_url: $_" -ForegroundColor Yellow }
+} catch { Write-Host "  [3/5] Aviso reset server_url: $_" -ForegroundColor Yellow }
 
-Write-Host "[AtendIA] Verificando volume do Ollama..." -ForegroundColor Cyan
-$ollamaVol = docker volume ls --filter "name=atendia-tunnel_ollama_data" --format "{{.Name}}" 2>$null
-if (-not $ollamaVol) {
-  Write-Host "[AtendIA] Criando volume atendia-tunnel_ollama_data..." -ForegroundColor Yellow
-  docker volume create atendia-tunnel_ollama_data | Out-Null
-  Write-Host "[AtendIA] Volume criado" -ForegroundColor Green
-}
-
-Write-Host "[AtendIA] Baixando imagens Docker..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  [3/5] Baixando as imagens (Evolution + Postgres + Redis + Tunel)..." -ForegroundColor Cyan
+Write-Host "  [3/5] PODE DEMORAR 5 a 15 min na 1a vez. Vai aparecer o progresso aqui embaixo." -ForegroundColor Yellow
+Write-Host "  [3/5] NAO FECHE esta janela - pode minimizar." -ForegroundColor Yellow
+Write-Host ""
 $pullOK = $false
 for ($i = 1; $i -le 3; $i++) {
-  docker compose -f docker-compose.evolution.yml pull 2>$null
+  docker compose -f docker-compose.evolution.yml pull
   if ($LASTEXITCODE -eq 0) {
     $pullOK = $true
     break
   }
-  Write-Host "[AtendIA] Pull falhou (tentativa $i/3), aguardando 15s..." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "  [3/5] Download falhou (tentativa $i/3). Verifique sua internet..." -ForegroundColor Yellow
+  Write-Host "  [3/5] Vou tentar de novo em 15 segundos." -ForegroundColor Gray
   Start-Sleep -Seconds 15
 }
 if (-not $pullOK) {
-  Write-Host "[AtendIA] [ERRO] Falha ao baixar imagens Docker apos 3 tentativas." -ForegroundColor Red
-  Write-Host "[AtendIA] Verifique sua conexao com a internet e tente novamente." -ForegroundColor Yellow
-  Write-Host "[AtendIA] Se o Docker Desktop acabou de iniciar, aguarde 1 minuto e tente novamente." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "  [3/5] Nao consegui baixar as imagens apos 3 tentativas." -ForegroundColor Red
+  Write-Host "  O que fazer: confira sua internet (ou a VPN, se usar) e rode ESTE MESMO comando de novo." -ForegroundColor Yellow
+  Write-Host "  Nada quebrou - e so tentar outra vez mais tarde." -ForegroundColor Gray
+  Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
-
-Write-Host "[AtendIA] Subindo containers..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  [3/5] Imagens prontas. Subindo os containers..." -ForegroundColor Cyan
 docker compose -f docker-compose.evolution.yml build --no-cache tunnel-info
 docker compose -f docker-compose.evolution.yml up -d --force-recreate
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "[AtendIA] [ERRO] Falha ao subir os containers" -ForegroundColor Red
+  Write-Host ""
+  Write-Host "  [3/5] Falha ao subir os containers." -ForegroundColor Red
+  Write-Host "  O que fazer: feche e ABRA o Docker Desktop de novo, aguarde ficar pronto e rode este comando outra vez." -ForegroundColor Yellow
+  Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
 
-Write-Host "[AtendIA] Verificando saude dos containers..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  [3/5] Verificando se tudo subiu bem (10 segundos)..." -ForegroundColor Cyan
 Start-Sleep -Seconds 8
 $failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null
 if ($failed) {
-  Write-Host "[AtendIA] [ERRO] Containers falharam ao subir: $failed" -ForegroundColor Red
-  $failed | ForEach-Object { Write-Host "[AtendIA] Veja os logs: docker logs $_" -ForegroundColor Gray }
+  Write-Host ""
+  Write-Host "  [3/5] Alguns containers falharam: $failed" -ForegroundColor Red
+  $failed | ForEach-Object { Write-Host "  Veja o motivo com: docker logs $_" -ForegroundColor Gray }
+  Write-Host "  O que fazer: rode este comando de novo - ele limpa e sobe tudo do zero (nao perde a sessao do WhatsApp)." -ForegroundColor Yellow
+  Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
-Write-Host "[AtendIA] Containers ativos" -ForegroundColor Green
+Write-Host "  [3/5] OK! Containers no ar:" -ForegroundColor Green
+docker ps --filter "label=com.docker.compose.project=atendia-tunnel" --format "   {{.Names}}  [{{.Status}}]" 2>$null
 
-Write-Host "[AtendIA] Baixando modelo Ollama (gemma3:4b)..." -ForegroundColor Cyan
+# ---------- PASSO 4/5: modelo da IA ----------
+Write-Host ""
+Write-Host "  [4/5] Preparando o volume do Ollama..." -ForegroundColor Cyan
+$ollamaVol = docker volume ls --filter "name=atendia-tunnel_ollama_data" --format "{{.Name}}" 2>$null
+if (-not $ollamaVol) {
+  docker volume create atendia-tunnel_ollama_data | Out-Null
+  Write-Host "  [4/5] Volume criado" -ForegroundColor Green
+} else {
+  Write-Host "  [4/5] Volume ja existe" -ForegroundColor Green
+}
+
 $ollamaContainer = docker ps --filter "ancestor=ollama/ollama" --format "{{.Names}}" 2>$null | Select-Object -First 1
 if (-not $ollamaContainer) { $ollamaContainer = docker ps -a --filter "name=ollama" --format "{{.Names}}" 2>$null | Select-Object -First 1 }
 if ($ollamaContainer) {
-  docker exec $ollamaContainer ollama pull gemma3:4b 2>$null
-  Write-Host "[AtendIA] Modelo Ollama pronto" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  [4/5] Baixando o modelo da IA (gemma3:4b, ~3 GB)." -ForegroundColor Cyan
+  Write-Host "  [4/5] PODE DEMORAR 10 a 30 min dependendo da internet. O progresso aparece aqui." -ForegroundColor Yellow
+  Write-Host "  [4/5] NAO FECHE esta janela - pode minimizar. (A IA e opcional p/ o WhatsApp: se falhar, sigo em frente.)" -ForegroundColor Yellow
+  Write-Host ""
+  docker exec $ollamaContainer ollama pull gemma3:4b
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host ""
+    Write-Host "  [4/5] OK! Modelo da IA pronto" -ForegroundColor Green
+  } else {
+    Write-Host ""
+    Write-Host "  [4/5] Nao consegui baixar o modelo da IA agora - sem problema." -ForegroundColor Yellow
+    Write-Host "  [4/5] O WhatsApp funciona normal; a IA local voce baixa depois rodando:" -ForegroundColor Gray
+    Write-Host "  [4/5]   docker exec $($ollamaContainer) ollama pull gemma3:4b" -ForegroundColor Gray
+  }
 } else {
-  Write-Host "[AtendIA] [!] Container Ollama nao encontrado" -ForegroundColor Yellow
+  Write-Host "  [4/5] Container Ollama nao encontrado - pulando o download da IA (opcional)." -ForegroundColor Yellow
 }
 
-Write-Host "[AtendIA] Aguardando tunnel Cloudflare..." -ForegroundColor Cyan
+# ---------- PASSO 5/5: tunel + sincronizacao ----------
+Write-Host ""
+Write-Host "  [5/5] Criando o tunel Cloudflare (endereco publico do seu WhatsApp)..." -ForegroundColor Cyan
+Write-Host "  [5/5] Isso leva ate 2 minutos. Pontinhos = ainda trabalhando..." -ForegroundColor Gray
 $tunnelUrl = $null
 for ($i = 0; $i -lt 24; $i++) {
   Start-Sleep -Seconds 5
+  Write-Host "." -NoNewline -ForegroundColor Cyan
   try {
     $resp = Invoke-WebRequest -Uri "http://localhost:9876/info" -UseBasicParsing -TimeoutSec 3
     $data = $resp.Content | ConvertFrom-Json
@@ -278,66 +321,78 @@ for ($i = 0; $i -lt 24; $i++) {
     }
   } catch {}
 }
+Write-Host ""
 if (-not $tunnelUrl) {
-  Write-Host "[AtendIA] [ERRO] Tunnel nao subiu - verifique: docker logs atendia-tunnel-tunnel-info-1" -ForegroundColor Red
+  Write-Host ""
+  Write-Host "  [5/5] O tunel nao subiu agora." -ForegroundColor Red
+  Write-Host "  O que fazer: veja o motivo com:  docker logs atendia-tunnel-tunnel-info-1" -ForegroundColor Gray
+  Write-Host "  Depois rode este comando de novo - ele limpa e sobe tudo de novo (nao perde a sessao)." -ForegroundColor Yellow
+  Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
 
 $ollamaEndpoint = "$tunnelUrl/ollama"
 $evolutionUrl = "$tunnelUrl/evolution"
-Write-Host "[AtendIA] Tunnel ativo: $tunnelUrl" -ForegroundColor Green
-Write-Host "[AtendIA] Evolution API: $evolutionUrl" -ForegroundColor Green
-Write-Host "[AtendIA] Ollama IA: $ollamaEndpoint" -ForegroundColor Green
+Write-Host "  [5/5] Tunel ativo: $tunnelUrl" -ForegroundColor Green
 
-Write-Host "[AtendIA] Atualizando endpoints no Supabase..." -ForegroundColor Cyan
-
+Write-Host ""
+Write-Host "  [5/5] Avisando o app (sincronizando as URLs)..." -ForegroundColor Cyan
 try {
   $body = @{ tunnel_url = $tunnelUrl } | ConvertTo-Json -Depth 3
   Invoke-WebRequest -Uri "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-tunnel" -Method POST -Headers $authHeader -Body $body -UseBasicParsing -TimeoutSec 10 | Out-Null
-  Write-Host "[AtendIA] Ollama endpoint atualizado" -ForegroundColor Green
-} catch { Write-Host "[AtendIA] Aviso update-tunnel: $_" -ForegroundColor Yellow }
+  Write-Host "  [5/5] Ollama endpoint atualizado" -ForegroundColor Green
+} catch { Write-Host "  [5/5] Aviso update-tunnel: $_" -ForegroundColor Yellow }
 
 try {
   $body = @{ server_url = $evolutionUrl } | ConvertTo-Json -Depth 3
   Invoke-WebRequest -Uri "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-evolution" -Method POST -Headers $authHeader -Body $body -UseBasicParsing -TimeoutSec 10 | Out-Null
-  Write-Host "[AtendIA] Evolution config atualizado" -ForegroundColor Green
-} catch { Write-Host "[AtendIA] Aviso update-evolution: $_" -ForegroundColor Yellow }
+  Write-Host "  [5/5] Evolution config atualizado" -ForegroundColor Green
+} catch { Write-Host "  [5/5] Aviso update-evolution: $_" -ForegroundColor Yellow }
 
 if (-not $NoReload) {
-  Write-Host "[AtendIA] Iniciando relay em background..." -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "  [5/5] Ligando o mensageiro interno (relay)..." -ForegroundColor Cyan
   $job = Start-Job -ScriptBlock {
     param($folder)
     Set-Location -LiteralPath $folder
     powershell -ExecutionPolicy Bypass -File "relay-whatsapp.ps1"
   } -ArgumentList (Get-Location).Path
-  Write-Host "[AtendIA] Relay rodando (Job ID: $($job.Id))" -ForegroundColor Green
+  Write-Host "  [5/5] Relay ligado (Job ID: $($job.Id))" -ForegroundColor Green
 }
 
+# ---------- RESULTADO FINAL ----------
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  AtendIA Docker Local pronto!" -ForegroundColor Cyan
+Write-Host "  TUDO PRONTO! Checklist final:" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Tunnel URL: $tunnelUrl" -ForegroundColor White
+Write-Host "  [1/5] Docker Desktop ......... OK" -ForegroundColor Green
+Write-Host "  [2/5] Arquivos ................ OK" -ForegroundColor Green
+Write-Host "  [3/5] Containers (WhatsApp) ... OK" -ForegroundColor Green
+Write-Host "  [4/5] IA local (Ollama) ....... OK (opcional)" -ForegroundColor Green
+Write-Host "  [5/5] Tunel + sincronizacao ... OK" -ForegroundColor Green
+Write-Host ""
 Write-Host "  Evolution API: $evolutionUrl" -ForegroundColor White
 Write-Host "  Ollama IA: $ollamaEndpoint" -ForegroundColor White
+Write-Host "  API Key: atendia123" -ForegroundColor White
 Write-Host ""
-Write-Host "  [!] MODO LOCAL:" -ForegroundColor Yellow
-Write-Host "  - O PC precisa ficar ligado enquanto usar" -ForegroundColor Gray
-Write-Host "  - Se reiniciar, rode setup.ps1 novamente (URL muda)" -ForegroundColor Gray
-Write-Host "  - Para producao estavel, use Railway (opcao 1)" -ForegroundColor Gray
-Write-Host "  - Para wipe total (remover modelos Ollama + dados DB): setup.ps1 -Clean" -ForegroundColor Gray
-Write-Host ""
+Write-Host "  IMPORTANTE - MODO LOCAL:" -ForegroundColor Yellow
+Write-Host "  - DEIXE ESTA JANELA ABERTA (pode minimizar) - o WhatsApp usa o mensageiro que esta rodando aqui" -ForegroundColor Yellow
 if (-not $NoReload) {
-  Write-Host "  Relay em background (Job $($job.Id))" -ForegroundColor Yellow
-  Write-Host "  Logs: Receive-Job $($job.Id) | Parar: Stop-Job $($job.Id)" -ForegroundColor Gray
+  Write-Host "  - Relay em background (Job $($job.Id))" -ForegroundColor Gray
 }
+Write-Host "  - Se o PC reiniciar: abra o Docker Desktop e rode ESTE comando de novo (a URL muda e re-sincroniza sozinho)" -ForegroundColor Gray
+Write-Host "  - Para producao estavel com PC desligado: use a VM Oracle gratis (P7Store > Configuracoes > WhatsApp > modo 1)" -ForegroundColor Gray
+Write-Host "  - Para comecar do zero (apaga tudo): setup.ps1 -Docker -Clean" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  PROXIMO PASSO:" -ForegroundColor Green
-Write-Host "  1. Abra https://atend7ia.vercel.app -> Config WhatsApp" -ForegroundColor White
-Write-Host "  2. Cole esta URL: $evolutionUrl" -ForegroundColor White
-Write-Host "  3. API Key: atendia123 (ou a que voce configurou)" -ForegroundColor White
-Write-Host "  4. Clique Testar -> Conectar WhatsApp -> escaneie QR Code" -ForegroundColor White
+Write-Host "  PROXIMO PASSO - conectar o WhatsApp (1 minuto):" -ForegroundColor Green
+Write-Host "  1. Abri o app do AtendIA no navegador pra voce" -ForegroundColor White
+Write-Host "  2. Va em Config WhatsApp" -ForegroundColor White
+Write-Host "  3. Cole esta URL: $evolutionUrl" -ForegroundColor White
+Write-Host "  4. API Key: atendia123  ->  clique Testar" -ForegroundColor White
+Write-Host "  5. Digite seu numero -> Conectar WhatsApp -> escaneie o QR Code no celular" -ForegroundColor White
 Write-Host ""
 Write-Host "  IA (opcional): Configure no P7Store -> Configuracoes -> IA" -ForegroundColor Gray
 Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+Start-Process "https://atend7ia.vercel.app"
