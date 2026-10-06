@@ -152,7 +152,7 @@ bash Docker/scripts/deploy_database.sh >/dev/null 2>&1 || fail "Migrations falha
 say "Instalando ponte do tunnel Cloudflare..."
 mkdir -p "$BaseDir"
 cat > "$BaseDir/atendia-tunnel.py" <<'PYEOF'
-import subprocess, re, threading, json, urllib.request, os, time
+import subprocess, re, threading, json, urllib.request, os, time, datetime
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 PORT = int(os.environ.get("PORT", "9876"))
@@ -162,42 +162,109 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 RELAY_SECRET = os.environ.get("RELAY_SECRET", "")
 CF = os.environ.get("CLOUDFLARED_BIN", "/usr/local/bin/cloudflared")
 TUNNEL_URL = ""
+CF_PROC = None  # processo cloudflared atual (o watchdog mata ele p/ forcar restart)
+STATE_DIR = "/var/lib/atendia"
+SYNC_FILE = STATE_DIR + "/last-sync"
+RETRY_WAITS = [30, 60, 120, 240]  # espera entre as ate 5 tentativas de sincronizacao
+
+def save_last_sync(tunnel_url, path):
+    # Registro da ultima sincronizacao OK (o atendia-doctor le este arquivo)
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(SYNC_FILE, "w") as f:
+            f.write("ts=%d\n" % int(time.time()))
+            f.write("quando=%s\n" % datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+            f.write("url=%s\n" % tunnel_url)
+            f.write("endpoint=%s\n" % path)
+    except Exception as e:
+        print("[relay] aviso: nao consegui gravar %s: %s" % (SYNC_FILE, e), flush=True)
 
 def notify_supabase(tunnel_url):
-    if not SUPABASE_URL or not RELAY_SECRET:
+    # Sincroniza a URL com o app: ate 5 tentativas com espera crescente (30/60/120/240s).
+    if not tunnel_url or not SUPABASE_URL or not RELAY_SECRET:
         return
     evo = tunnel_url + "/evolution"
     for path, payload in (
         ("/functions/v1/webhook-whatsapp/relay/update-tunnel", {"tunnel_url": tunnel_url}),
         ("/functions/v1/webhook-whatsapp/relay/update-evolution", {"server_url": evo}),
     ):
-        try:
-            req = urllib.request.Request(SUPABASE_URL + path,
-                data=json.dumps(payload).encode(), method="POST",
-                headers={"Authorization": "Bearer " + RELAY_SECRET, "Content-Type": "application/json"})
-            urllib.request.urlopen(req, timeout=30).read()
-            print("[relay] sincronizado " + path, flush=True)
-        except Exception as e:
-            print("[relay] falhou %s: %s" % (path, e), flush=True)
+        for attempt in range(1, 6):
+            try:
+                req = urllib.request.Request(SUPABASE_URL + path,
+                    data=json.dumps(payload).encode(), method="POST",
+                    headers={"Authorization": "Bearer " + RELAY_SECRET, "Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=30).read()
+                print("[relay] sincronizado %s (tentativa %d)" % (path, attempt), flush=True)
+                save_last_sync(tunnel_url, path)
+                break
+            except Exception as e:
+                if attempt < 5:
+                    wait = RETRY_WAITS[attempt - 1]
+                    print("[relay] %s falhou (%s) - tentativa %d/5 de novo em %ds" % (path, e, attempt + 1, wait), flush=True)
+                    time.sleep(wait)
+                else:
+                    print("[relay] DESISTIU de %s apos 5 tentativas: %s" % (path, e), flush=True)
+
+def notify_async(tunnel_url):
+    # Nao bloqueia o tunnel_loop enquanto espera os retries
+    threading.Thread(target=notify_supabase, args=(tunnel_url,), daemon=True).start()
 
 def tunnel_loop():
-    global TUNNEL_URL
+    global TUNNEL_URL, CF_PROC
     while True:
         try:
             proc = subprocess.Popen(
                 [CF, "tunnel", "--url", "http://127.0.0.1:%d" % PORT, "--no-autoupdate"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            CF_PROC = proc
             for line in proc.stdout:
                 m = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
                 if m and m.group() != TUNNEL_URL:
                     TUNNEL_URL = m.group()
                     print("[tunnel] URL: " + TUNNEL_URL, flush=True)
-                    notify_supabase(TUNNEL_URL)
+                    notify_async(TUNNEL_URL)
         except Exception as e:
             print("[tunnel] erro: %s" % e, flush=True)
+        CF_PROC = None
         TUNNEL_URL = ""
         print("[tunnel] caiu, reiniciando em 10s...", flush=True)
         time.sleep(10)
+
+def watchdog_loop():
+    # Vitalidade do tunnel: processo vivo mas tunnel morto e a falha silenciosa.
+    # A cada 60s testa {URL}/info pela internet; 3 falhas seguidas = mata o cloudflared
+    # para o tunnel_loop subir outro (URL nova, que re-notifica o app).
+    fails = 0
+    while True:
+        time.sleep(60)
+        url = TUNNEL_URL
+        if not url:
+            fails = 0
+            continue
+        try:
+            urllib.request.urlopen(url + "/info", timeout=20).read()
+            fails = 0
+        except Exception as e:
+            fails += 1
+            print("[watchdog] %s/info falhou (%d/3): %s" % (url, fails, e), flush=True)
+            if fails >= 3:
+                fails = 0
+                print("[watchdog] tunnel morto com processo vivo - matando cloudflared p/ reiniciar...", flush=True)
+                proc = CF_PROC
+                if proc is not None and proc.poll() is None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+def resync_loop():
+    # Re-sync periodica (~30 min) mesmo sem a URL girar - cura a "morte silenciosa"
+    # (caso real: ponte parou de sincronizar e ninguem soube por meses).
+    while True:
+        time.sleep(1800)
+        if TUNNEL_URL:
+            print("[relay] re-sync periodica de 30min...", flush=True)
+            notify_async(TUNNEL_URL)
 
 class Handler(BaseHTTPRequestHandler):
     def cors_headers(self):
@@ -280,8 +347,19 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print("[atendia-tunnel] ouvindo na porta %d" % PORT, flush=True)
     threading.Thread(target=tunnel_loop, daemon=True).start()
+    threading.Thread(target=watchdog_loop, daemon=True).start()
+    threading.Thread(target=resync_loop, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 PYEOF
+
+# 9b) atendia-doctor: diagnostico rapido na VM (o que esta saudavel + comando que corrige)
+say "Instalando atendia-doctor (diagnostico rapido)..."
+if curl -fsSL --max-time 60 -o /usr/local/bin/atendia-doctor \
+     "https://raw.githubusercontent.com/Projectz7/atendia-setup/main/atendia-doctor.sh" 2>/dev/null; then
+  chmod +x /usr/local/bin/atendia-doctor
+else
+  warn "Nao consegui baixar atendia-doctor (nao critico). Diagnostico manual: journalctl -u atendia-tunnel -n 50"
+fi
 
 # 10) systemd: servicos sempre ligados (auto-start pos-reboot, sem cron)
 say "Criando servicos systemd (evolution + tunnel)..."
@@ -352,26 +430,63 @@ say "Tunnel ativo: $TunnelUrl"
 say "Evolution API: $EvoUrl"
 
 # 13) Sincroniza a URL com o app (a ponte tambem re-sincroniza sozinha apos reboot)
+mkdir -p /var/lib/atendia
+mark_sync() {
+  { echo "ts=$(date +%s)"
+    echo "quando=$(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+    echo "url=$TunnelUrl"
+    echo "endpoint=$1"
+  } > /var/lib/atendia/last-sync
+}
 if curl -fsS -X POST "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-tunnel" \
      -H "Authorization: Bearer $RelaySecret" -H "Content-Type: application/json" \
      -d "{\"tunnel_url\": \"$TunnelUrl\"}" >/dev/null 2>&1; then
   say "Endpoint base registrado no app."
+  mark_sync "relay/update-tunnel"
 else
-  warn "update-tunnel falhou (nao critico - a ponte tentara de novo)."
+  warn "update-tunnel falhou (a ponte tentara de novo - agora com ate 5 tentativas e re-sync de 30min)."
 fi
 if curl -fsS -X POST "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-evolution" \
      -H "Authorization: Bearer $RelaySecret" -H "Content-Type: application/json" \
      -d "{\"server_url\": \"$EvoUrl\"}" >/dev/null 2>&1; then
   say "URL da Evolution sincronizada com o P7Store/AtendIA!"
+  mark_sync "relay/update-evolution"
 else
   warn "update-evolution falhou - a ponte re-sincroniza sozinha; se nao aparecer, cole a URL manualmente no app."
 fi
 
+# 14) Checkpoint de verdade: a URL responde pela INTERNET? (de fora pra dentro)
+say "Checkpoint final: testando $TunnelUrl/info pela internet..."
+ExtOK=""
+ExtCode=""
+for i in 1 2 3; do
+  ExtCode="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$TunnelUrl/info" 2>/dev/null || true)"
+  if [ "$ExtCode" = "200" ]; then ExtOK="1"; break; fi
+  if [ "$i" -lt 3 ]; then sleep 5; fi
+done
+if [ -n "$ExtOK" ]; then
+  say "URL respondeu pela internet (HTTP 200) - sucesso confirmado de verdade."
+else
+  warn "URL NAO respondeu pela internet (HTTP ${ExtCode:-000})."
+  warn "Rode 'atendia-doctor' na VM - ele mostra o que esta errado e o comando que corrige."
+fi
+
 echo ""
 echo "====================================================="
-echo "  Pronto! WhatsApp na nuvem - PC pode desligar."
+if [ -n "$ExtOK" ]; then
+  echo "  Pronto! WhatsApp na nuvem - PC pode desligar."
+else
+  echo "  INSTALADO, MAS ATENCAO: a URL NAO respondeu pela internet."
+fi
 echo "====================================================="
 echo ""
+if [ -z "$ExtOK" ]; then
+  echo "  [!] Nao confie ainda na URL acima. Na VM, rode:"
+  echo "        atendia-doctor"
+  echo "  Ele aponta o problema e o proximo passo (ex.: systemctl restart atendia-tunnel)."
+  echo "  Logs do tunnel: journalctl -u atendia-tunnel -n 50 --no-pager"
+  echo ""
+fi
 echo "  Evolution URL: $EvoUrl"
 echo "  API Key:       atendia123"
 echo ""
@@ -380,10 +495,13 @@ echo "     (ou https://atend7ia.vercel.app -> Config WhatsApp)"
 echo "  2. A URL acima ja foi sincronizada com o app."
 echo "  3. Conectar WhatsApp -> escaneie o QR Code uma unica vez."
 echo ""
+echo "  Saude da VM (rode na propria VM): atendia-doctor"
 echo "  IA: P7Store -> Configuracoes -> IA (cloud: NVIDIA, Gemini, OpenAI...)."
 echo "  Sem Docker: Node + Postgres + Redis + Evolution nativos (systemd)."
 echo "  Sessao WhatsApp fica salva no PostgreSQL da VM - nao re-escaneia apos reboot."
 echo "  Reboot? Tudo se auto-inicia e o tunnel re-sincroniza a URL sozinho."
+echo "  Auto-cura: watchdog testa a URL a cada 60s e reinicia o tunnel se travar;"
+echo "             re-sync com o app a cada 30min mesmo sem a URL girar."
 echo ""
 echo "  Logs: journalctl -u evolution -f   |   journalctl -u atendia-tunnel -f"
 echo "  Reinstalar/atualizar: rode este mesmo comando de novo (seguro)."
