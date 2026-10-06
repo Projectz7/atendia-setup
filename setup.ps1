@@ -81,6 +81,13 @@ if ($choice -eq "1") {
 # ==================== MODO DOCKER LOCAL ====================
 Write-Host "[AtendIA] Modo Docker Local" -ForegroundColor Yellow
 Write-Host ""
+Write-Host "  Assistente guiado - o que vai acontecer:" -ForegroundColor White
+Write-Host "  [1/5] Verificar o Docker Desktop (pausa se precisar de voce)" -ForegroundColor Gray
+Write-Host "  [2/5] Baixar os arquivos (docker-compose + relay)" -ForegroundColor Gray
+Write-Host "  [3/5] Subir Evolution + Postgres + Redis + Ollama + Tunel" -ForegroundColor Gray
+Write-Host "  [4/5] Sincronizar as URLs com o app" -ForegroundColor Gray
+Write-Host "  [5/5] Resultado final com a Evolution URL" -ForegroundColor Gray
+Write-Host ""
 Write-Host "  ANTES DE CONTINUAR:" -ForegroundColor White
 Write-Host "  -----------------------------------------------" -ForegroundColor Gray
 Write-Host "  Esse modo precisa do Docker Desktop instalado." -ForegroundColor White
@@ -108,7 +115,7 @@ Write-Host "  Apos instalar:" -ForegroundColor White
 Write-Host "  1. Abra o Docker Desktop (inicie pelo atalho)" -ForegroundColor Gray
 Write-Host "  2. Aceite os termos e aguarde ele iniciar" -ForegroundColor Gray
 Write-Host "  3. Volte aqui e pressione ENTER para continuar" -ForegroundColor Gray
-Write-Host "  4. Se preferir o modo nuvem, feche e execute de novo escolhendo [1]" -ForegroundColor Gray
+Write-Host "  4. Se preferir nuvem gratis (VM Oracle, PC desligado): P7Store > Configuracoes > WhatsApp > modo 1" -ForegroundColor Gray
 Write-Host "  -----------------------------------------------" -ForegroundColor Gray
 Write-Host ""
 pause

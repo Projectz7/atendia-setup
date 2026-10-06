@@ -16,3 +16,15 @@ curl -sL https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup-li
 ```
 Sobe a mesma stack via docker-compose (Postgres + Redis + Evolution + tunnel-info).
 
+## Docker Local no seu PC (Windows/Mac/Linux) — assistente guiado
+```powershell
+curl.exe -sL -o setup.ps1 https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup.ps1
+powershell -File setup.ps1 -Docker
+```
+Sobe a stack local (Postgres + Redis + Evolution + Ollama CPU + túnel Cloudflare) direto no PC,
+com assistente passo a passo no terminal: mostra o roteiro [1/5..5/5], verifica o Docker Desktop
+(pausa esperando você), baixa os arquivos, sobe os containers, testa o túnel pela internet e
+sincroniza as URLs com o app sozinho. Sessão do WhatsApp salva em volumes: re-rodar é seguro;
+`-Clean` apaga tudo (sessão + modelos). Precisa de Docker Desktop e PC ligado enquanto usar.
+
+
