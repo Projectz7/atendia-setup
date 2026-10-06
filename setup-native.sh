@@ -17,6 +17,7 @@ EvoRepo="https://github.com/evolution-foundation/evolution-api.git"
 say()  { echo -e "\e[36m[AtendIA]\e[0m $1"; }
 warn() { echo -e "\e[33m[AtendIA] [AVISO]\e[0m $1"; }
 fail() { echo -e "\e[31m[AtendIA] [ERRO]\e[0m $1" >&2; exit 1; }
+ok()  { echo -e "\e[32m[AtendIA]\e[0m $1"; }
 
 [ "$(id -u)" -eq 0 ] || fail "Rode como root: curl ... | sudo bash"
 command -v apt-get >/dev/null 2>&1 || fail "Este script suporta Ubuntu/Debian (apt). Use Ubuntu 22.04+."
@@ -28,11 +29,21 @@ echo "====================================================="
 echo ""
 
 say "Arquitetura: $(uname -m)  |  Tag Evolution API: $EvoTag"
+echo ""
+say "Assistente guiado - 6 passos. Eu aviso cada um em verde quando terminar:"
+echo "  [1/6] Preparar a VM (pacotes + Node.js 24)"
+echo "  [2/6] Conector do tunnel + banco de dados (PostgreSQL + Redis)"
+echo "  [3/6] Evolution API: download + compilacao (o passo mais demorado)"
+echo "  [4/6] Ponte do tunnel + diagnostico (atendia-doctor)"
+echo "  [5/6] Servicos permanentes (ligam sozinhos apos reiniciar a VM)"
+echo "  [6/6] Subir tudo, sincronizar com o app e testar pela internet"
+echo ""
+warn "NAO FECHE este terminal durante a instalacao (pode minimizar)."
 
 # 0) Swap em VMs de 1GB (build TypeScript exige memoria)
 MemMB="$(free -m 2>/dev/null | awk '/^Mem:/{print $2}')"
 if [ -n "$MemMB" ] && [ "$MemMB" -lt 1400 ] && ! swapon --show 2>/dev/null | grep -q .; then
-  say "RAM baixa (${MemMB}MB) - criando swap de 2GB..."
+  say "[1/6] RAM baixa (${MemMB}MB) - criando swap de 2GB (memoria extra virtual)..."
   {
     fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
     chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
@@ -52,7 +63,7 @@ fi
 ( crontab -l 2>/dev/null | grep -v 'setup-linux.sh' ) | crontab - 2>/dev/null || true
 
 # 2) Pacotes base (nativos, sem Docker)
-say "Instalando pacotes: git, curl, ffmpeg, openssl, python3, postgresql, redis..."
+say "[1/6] Instalando pacotes base (git, curl, postgres, redis, ffmpeg...)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null 2>&1 || true
 apt-get install -y git curl ca-certificates openssl ffmpeg python3 postgresql redis-server >/dev/null \
@@ -63,11 +74,12 @@ systemctl enable --now redis-server >/dev/null 2>&1 || true
 # 3) Node.js 24 (mesma versao usada pelo build oficial da Evolution API)
 NodeMajor="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
 if [ "$NodeMajor" -lt 20 ] 2>/dev/null; then
-  say "Instalando Node.js 24 (NodeSource)..."
+  say "[1/6] Instalando Node.js 24 (a base da Evolution API)..."
   curl -fsSL https://deb.nodesource.com/setup_24.x | bash - >/dev/null || fail "Falha no setup NodeSource."
   apt-get install -y nodejs >/dev/null || fail "Falha ao instalar Node.js."
 fi
 say "Node.js $(node -v) | npm $(npm -v)"
+ok "[1/6] OK - VM preparada (pacotes + Node.js)"
 
 # 4) cloudflared (tunnel HTTPS gratuito, binario unico)
 if [ ! -x /usr/local/bin/cloudflared ]; then
@@ -76,14 +88,14 @@ if [ ! -x /usr/local/bin/cloudflared ]; then
     x86_64|amd64)  CfArch="amd64" ;;
     *) fail "Arquitetura nao suportada: $(uname -m)" ;;
   esac
-  say "Baixando cloudflared ($CfArch)..."
+  say "[2/6] Baixando o cloudflared - o conector do tunnel (binario unico)..."
   curl -fsSL -o /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$CfArch" \
     || fail "Falha ao baixar cloudflared."
   chmod +x /usr/local/bin/cloudflared
 fi
 
 # 5) PostgreSQL: banco + usuario (idempotente)
-say "Configurando PostgreSQL..."
+say "[2/6] Configurando o banco de dados (PostgreSQL + Redis)..."
 pg_isready -q 2>/dev/null || fail "PostgreSQL nao subiu."
 run_pg() {
   if command -v sudo >/dev/null 2>&1; then
@@ -99,16 +111,17 @@ run_pg -tAc "SELECT 1 FROM pg_roles WHERE rolname=\$\$evolution\$\$" 2>/dev/null
 run_pg -tAc "SELECT 1 FROM pg_database WHERE datname=\$\$evolution\$\$" 2>/dev/null | grep -q 1 \
   || run_pg -qc "CREATE DATABASE evolution OWNER evolution;" >/dev/null
 redis-cli ping >/dev/null 2>&1 || fail "Redis nao respondeu."
+ok "[2/6] OK - banco de dados + conector do tunnel prontos"
 
 # 6) Codigo-fonte da Evolution API (tag estavel, idempotente)
 mkdir -p "$BaseDir" && cd "$BaseDir"
 if [ -d "$EvoDir/.git" ]; then
-  say "Atualizando codigo da Evolution API (tag $EvoTag)..."
+  say "[3/6] Atualizando codigo da Evolution API (tag $EvoTag)..."
   git -C "$EvoDir" fetch --depth 1 origin "refs/tags/$EvoTag" >/dev/null 2>&1 \
     && git -C "$EvoDir" checkout -q FETCH_HEAD >/dev/null 2>&1 \
     || warn "Nao consegui atualizar o repositorio - seguindo com o codigo atual."
 else
-  say "Clonando Evolution API (tag $EvoTag)... (pode demorar alguns minutos)"
+  say "[3/6] Baixando o codigo da Evolution API (tag $EvoTag)... (pode demorar alguns minutos)"
   git clone --depth 1 --branch "$EvoTag" "$EvoRepo" "$EvoDir" >/dev/null 2>&1 \
     || fail "Falha ao clonar $EvoRepo (verifique internet/DNS)."
 fi
@@ -132,7 +145,7 @@ say ".env configurado (API Key atendia123, Postgres + Redis locais)."
 
 # 8) Dependencias + build (pulados se ja prontos - reexecutar e seguro)
 if [ ! -d node_modules ]; then
-  say "npm ci (dependencias)... (5-10 min na primeira vez)"
+  say "[3/6] Instalando dependencias (npm ci)... (5-10 min na primeira vez) - NAO FECHE o terminal"
   npm ci --no-audit --no-fund || fail "npm ci falhou (veja as mensagens acima). Manual: cd $EvoDir && npm ci"
 fi
 export DATABASE_PROVIDER=postgresql
@@ -141,15 +154,16 @@ if [ ! -d node_modules/.prisma ] || [ ! -f node_modules/@prisma/client/index.js 
   bash Docker/scripts/generate_database.sh >/dev/null 2>&1 || fail "Prisma generate falhou. Manual: cd $EvoDir && bash Docker/scripts/generate_database.sh"
 fi
 if [ ! -f dist/main.js ] || [ -n "$(find src -newer dist/main.js -name '*.ts' 2>/dev/null | head -n1)" ]; then
-  say "Compilando Evolution API (tsc + tsup)... (pode demorar)"
+  say "[3/6] Compilando a Evolution API... (o passo mais demorado: 5-15 min; muita saida na tela e NORMAL)"
   npm run build || fail "Build falhou (veja as mensagens acima). Manual: cd $EvoDir && npm run build"
 fi
 [ -f dist/main.js ] || fail "dist/main.js nao encontrado apos o build."
-say "Aplicando migrations no PostgreSQL..."
+say "[3/6] Criando as tabelas no banco (migrations)..."
 bash Docker/scripts/deploy_database.sh >/dev/null 2>&1 || fail "Migrations falharam (veja: cd $EvoDir && bash Docker/scripts/deploy_database.sh)."
+ok "[3/6] OK - Evolution API compilada e banco criado"
 
 # 9) Ponte do tunnel (python puro: /info + proxy /evolution com CORS + auto-sync com o app)
-say "Instalando ponte do tunnel Cloudflare..."
+say "[4/6] Instalando a ponte do tunnel (URL publica + auto-sincronizacao com o app)..."
 mkdir -p "$BaseDir"
 cat > "$BaseDir/atendia-tunnel.py" <<'PYEOF'
 import subprocess, re, threading, json, urllib.request, os, time, datetime
@@ -353,16 +367,17 @@ if __name__ == "__main__":
 PYEOF
 
 # 9b) atendia-doctor: diagnostico rapido na VM (o que esta saudavel + comando que corrige)
-say "Instalando atendia-doctor (diagnostico rapido)..."
+say "[4/6] Instalando atendia-doctor (diagnostico rapido)..."
 if curl -fsSL --max-time 60 -o /usr/local/bin/atendia-doctor \
      "https://raw.githubusercontent.com/Projectz7/atendia-setup/main/atendia-doctor.sh" 2>/dev/null; then
   chmod +x /usr/local/bin/atendia-doctor
 else
   warn "Nao consegui baixar atendia-doctor (nao critico). Diagnostico manual: journalctl -u atendia-tunnel -n 50"
 fi
+ok "[4/6] OK - ponte do tunnel + diagnostico instalados"
 
 # 10) systemd: servicos sempre ligados (auto-start pos-reboot, sem cron)
-say "Criando servicos systemd (evolution + tunnel)..."
+say "[5/6] Criando servicos permanentes (systemd - ligam sozinhos apos reiniciar a VM)..."
 cat > /etc/systemd/system/evolution.service <<'EOF'
 [Unit]
 Description=AtendIA - Evolution API (WhatsApp)
@@ -400,30 +415,37 @@ EOF
 systemctl daemon-reload >/dev/null 2>&1
 systemctl enable evolution atendia-tunnel >/dev/null 2>&1 || warn "Nao consegui habilitar auto-start."
 systemctl restart evolution >/dev/null 2>&1 || true
+ok "[5/6] OK - servicos permanentes criados e ativos"
 
 # 11) Espera a Evolution subir (porta 8080)
-say "Aguardando Evolution API subir..."
+say "[6/6] Subindo a Evolution API pela primeira vez (1-3 min, pontinhos = trabalhando)..."
 Up=""
 for i in $(seq 1 60); do
   Code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ 2>/dev/null || true)"
   [ -n "$Code" ] && [ "$Code" != "000" ] && Up="1" && break
+  printf '.'
   sleep 3
 done
+echo ""
 [ -n "$Up" ] || fail "Evolution nao subiu. Veja: journalctl -u evolution -n 50 --no-pager"
+ok "[6/6] Evolution API no ar (porta 8080)"
 
 # 12) Tunnel: espera URL https
 systemctl restart atendia-tunnel >/dev/null 2>&1 || true
-say "Aguardando tunnel Cloudflare..."
+say "[6/6] Aguardando o tunnel Cloudflare criar a URL publica (ate 3 min, pontinhos = trabalhando)..."
 TunnelUrl=""
 for i in $(seq 1 36); do
   sleep 5
+  printf '.'
   Info="$(curl -fsS http://127.0.0.1:9876/info 2>/dev/null || true)"
   if echo "$Info" | grep -q '"status": "active"'; then
     TunnelUrl="$(echo "$Info" | grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' | head -n1)"
     [ -n "$TunnelUrl" ] && break
   fi
 done
+echo ""
 [ -n "$TunnelUrl" ] || fail "Tunnel nao subiu. Veja: journalctl -u atendia-tunnel -n 50 --no-pager"
+ok "[6/6] Tunnel ativo - URL publica criada"
 
 EvoUrl="$TunnelUrl/evolution"
 say "Tunnel ativo: $TunnelUrl"
@@ -454,9 +476,10 @@ if curl -fsS -X POST "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-ev
 else
   warn "update-evolution falhou - a ponte re-sincroniza sozinha; se nao aparecer, cole a URL manualmente no app."
 fi
+ok "[6/6] OK - URLs sincronizadas com o app (P7Store/AtendIA)"
 
 # 14) Checkpoint de verdade: a URL responde pela INTERNET? (de fora pra dentro)
-say "Checkpoint final: testando $TunnelUrl/info pela internet..."
+  say "Checkpoint final: testando $TunnelUrl/info pela internet..."
 ExtOK=""
 ExtCode=""
 for i in 1 2 3; do
@@ -465,7 +488,7 @@ for i in 1 2 3; do
   if [ "$i" -lt 3 ]; then sleep 5; fi
 done
 if [ -n "$ExtOK" ]; then
-  say "URL respondeu pela internet (HTTP 200) - sucesso confirmado de verdade."
+  ok "URL respondeu pela internet (HTTP 200) - sucesso confirmado de verdade."
 else
   warn "URL NAO respondeu pela internet (HTTP ${ExtCode:-000})."
   warn "Rode 'atendia-doctor' na VM - ele mostra o que esta errado e o comando que corrige."
@@ -487,6 +510,17 @@ if [ -z "$ExtOK" ]; then
   echo "  Logs do tunnel: journalctl -u atendia-tunnel -n 50 --no-pager"
   echo ""
 fi
+if [ -n "$ExtOK" ]; then
+  echo ""
+  echo "  Checklist final:"
+  echo "  [1/6] VM preparada (Node.js) ........ OK"
+  echo "  [2/6] Banco + conector do tunnel .... OK"
+  echo "  [3/6] Evolution API compilada ....... OK"
+  echo "  [4/6] Ponte + diagnostico ........... OK"
+  echo "  [5/6] Servicos permanentes .......... OK"
+  echo "  [6/6] Tunnel + sincronizacao ........ OK (testado pela internet)"
+fi
+echo ""
 echo "  Evolution URL: $EvoUrl"
 echo "  API Key:       atendia123"
 echo ""
