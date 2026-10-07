@@ -14,71 +14,6 @@ Write-Host "  AtendIA - Configuracao WhatsApp + IA" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-if ($Docker) {
-  Write-Host "[Modo Docker Local]" -ForegroundColor Yellow
-  $choice = "docker"
-} else {
-  Write-Host "Escolha como conectar o WhatsApp:" -ForegroundColor White
-  Write-Host ""
-  Write-Host "  [1] Railway - Deploy na nuvem, 1 click (facil; PAGO apos o credito de teste)" -ForegroundColor Green
-  Write-Host "      Nao precisa deixar PC ligado, funciona no Vercel" -ForegroundColor Gray
-  Write-Host ""
-  Write-Host "  [GRATIS] VM Oracle Always Free (sempre ligada, zero custo)" -ForegroundColor Cyan
-  Write-Host "      Veja os passos em P7Store > Configuracoes > WhatsApp > Modo 1" -ForegroundColor Gray
-  Write-Host "      (1 comando na VM: setup-native.sh do repositorio atendia-setup - sem Docker)" -ForegroundColor Gray
-  Write-Host ""
-  Write-Host "  [2] Docker Local - Roda Evolution no seu PC (controle total)" -ForegroundColor Yellow
-  Write-Host "      Precisa Docker + PC ligado + tunnel Cloudflare" -ForegroundColor Gray
-  Write-Host ""
-  do {
-    $choice = Read-Host "Digite 1 ou 2"
-  } while ($choice -ne "1" -and $choice -ne "2")
-  Write-Host ""
-}
-
-if ($choice -eq "1") {
-  Write-Host "[AtendIA] Modo Railway (Nuvem)" -ForegroundColor Green
-  Write-Host ""
-  Write-Host "  PASSO 1: Deploy no Railway (1 click)" -ForegroundColor White
-  Write-Host "  -----------------------------------------------" -ForegroundColor Gray
-  Write-Host "  Abra no navegador:" -ForegroundColor White
-  Write-Host "  https://railway.app/template/atendia-evolution" -ForegroundColor Cyan
-  Write-Host ""
-  Write-Host "  - Clique em Deploy Now" -ForegroundColor Gray
-  Write-Host "  - Autentique com GitHub" -ForegroundColor Gray
-  Write-Host "  - Aguarde o build terminar (~3 min)" -ForegroundColor Gray
-  Write-Host "  - Copie a URL gerada (ex: https://evolution-xxx.up.railway.app)" -ForegroundColor Gray
-  Write-Host ""
-  Write-Host "  PASSO 2: Configure no AtendIA" -ForegroundColor White
-  Write-Host "  -----------------------------------------------" -ForegroundColor Gray
-  Write-Host "  1. Abra https://atend7ia.vercel.app" -ForegroundColor White
-  Write-Host "  2. Va em Config WhatsApp" -ForegroundColor White
-  Write-Host "  3. Cole a URL do Railway + API Key (atendia123)" -ForegroundColor White
-  Write-Host "  4. Clique em Testar -> deve aparecer.Conectado!" -ForegroundColor Green
-  Write-Host "  5. Digite seu numero -> Conectar WhatsApp -> escaneie QR Code" -ForegroundColor White
-  Write-Host ""
-  Write-Host "  PASSO 3: Configure a IA (opcional mas recomendado)" -ForegroundColor White
-  Write-Host "  -----------------------------------------------" -ForegroundColor Gray
-  Write-Host "  No P7Store -> Configuracoes -> IA:" -ForegroundColor White
-  Write-Host "  - Adicione uma IA cloud (DeepSeek, OpenAI ou Gemini)" -ForegroundColor Gray
-  Write-Host "  - DeepSeek: https://platform.deepseek.com (mais barata)" -ForegroundColor Gray
-  Write-Host "  - Gere uma API Key e cole la" -ForegroundColor Gray
-  Write-Host "  - Teste e ative" -ForegroundColor Gray
-  Write-Host "  - Depois no AtendIA -> Config IA -> selecione a IA criada" -ForegroundColor Gray
-  Write-Host ""
-  Write-Host "  Pronto! O AtendIA responde mensagens automaticamente." -ForegroundColor Green
-  Write-Host "  Mensagem recebida -> IA cloud responde -> enviada via Railway." -ForegroundColor Gray
-  Write-Host "  Nao precisa de relay, tunnel, ou PC ligado." -ForegroundColor Gray
-  Write-Host ""
-  Write-Host "============================================" -ForegroundColor Cyan
-  Write-Host "  Abrindo Railway no navegador..." -ForegroundColor Cyan
-  Write-Host "============================================" -ForegroundColor Cyan
-  Start-Process "https://railway.app/template/atendia-evolution"
-  Start-Process "https://atend7ia.vercel.app"
-  exit 0
-}
-
-# ==================== MODO DOCKER LOCAL ====================
 function Pausa([string]$msg) {
   Write-Host ""
   if ($msg) { Write-Host $msg -ForegroundColor White }
@@ -86,7 +21,138 @@ function Pausa([string]$msg) {
   Write-Host ""
 }
 
-Write-Host "[AtendIA] Modo Docker Local" -ForegroundColor Yellow
+if ($Docker) {
+  $choice = "3"
+} else {
+  Write-Host "Mesmos 3 caminhos do P7Store (Configuracoes > WhatsApp):" -ForegroundColor White
+  Write-Host ""
+  Write-Host "  [1] Nuvem gratis - VM Oracle (Recomendado)" -ForegroundColor Cyan
+  Write-Host "      PC desligado, sempre ligada, zero custo. Eu te guio passo a passo." -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  [2] Railway (mais facil - mas pago)" -ForegroundColor Green
+  Write-Host "      Nuvem pronta em 3 min. Credito gratis no inicio; depois e pago." -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  [3] Docker Local (controle total)" -ForegroundColor Yellow
+  Write-Host "      Gratis, roda no seu PC. Eu faco quase tudo sozinho (PC fica ligado)." -ForegroundColor Gray
+  Write-Host ""
+  do {
+    $choice = Read-Host "Digite 1, 2 ou 3"
+  } while ($choice -ne "1" -and $choice -ne "2" -and $choice -ne "3")
+  Write-Host ""
+}
+
+# ---------- CAMINHO 1: VM ORACLE (GUIADO) ----------
+if ($choice -eq "1") {
+  Write-Host "[AtendIA] Caminho 1 - Nuvem gratis: VM Oracle (Recomendado)" -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "  A VM e um 'computador gratis na nuvem' que fica sempre ligado." -ForegroundColor Gray
+  Write-Host "  Voce cria a conta, cria a VM e cola 1 comando nela. Eu guio cada passo." -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  Roteiro:" -ForegroundColor White
+  Write-Host "  [1/4] Criar conta Oracle (gratuita; cartao so para verificar - nao cobra)" -ForegroundColor Gray
+  Write-Host "  [2/4] Criar a VM (4 cliques, tudo padrao)" -ForegroundColor Gray
+  Write-Host "  [3/4] Entrar na VM pelo navegador (Cloud Shell - nao instala nada)" -ForegroundColor Gray
+  Write-Host "  [4/4] Colar 1 comando na VM - o resto e automatico e sincroniza com o app" -ForegroundColor Gray
+  Write-Host ""
+  Pausa "  Vamos comecar?"
+
+  Write-Host "  [1/4] Criar conta Oracle..." -ForegroundColor Cyan
+  $r = Read-Host "  Aperte ENTER para abrir o cadastro no navegador (ou N para pular)"
+  if ($r -ne "N" -and $r -ne "n") { Start-Process "https://signup.cloud.oracle.com/" }
+  Write-Host "  No site: e-mail -> nome/senha -> codigo que chega no e-mail -> cartao." -ForegroundColor Gray
+  Write-Host "  A ativacao pode demorar alguns minutos." -ForegroundColor Gray
+  Pausa "  Quando entrar no painel do Oracle, volte aqui."
+
+  Write-Host "  [2/4] Criar a VM..." -ForegroundColor Cyan
+  $r = Read-Host "  Aperte ENTER para abrir o painel de criacao (ou N para pular)"
+  if ($r -ne "N" -and $r -ne "n") { Start-Process "https://cloud.oracle.com/compute/instances/create" }
+  Write-Host "  No painel (clique onde eu digo):" -ForegroundColor Gray
+  Write-Host "  - Name: deixe como esta" -ForegroundColor Gray
+  Write-Host "  - Image: Edit -> Canonical Ubuntu 22.04 -> Select" -ForegroundColor Gray
+  Write-Host "  - Shape: Ampere A1.Flex (4 OCPU / 24 GB) - e o plano gratis" -ForegroundColor Gray
+  Write-Host "  - SSH keys: Generate SSH key pair -> Save Private Key (guarde o arquivo .key)" -ForegroundColor Gray
+  Write-Host "  - Create -> aguarde o status virar Running (2-3 min)" -ForegroundColor Gray
+  Pausa "  VM com status Running? Volte aqui."
+
+  Write-Host "  [3/4] Entrar na VM pelo navegador..." -ForegroundColor Cyan
+  Write-Host "  - Na lista de instancias, clique nos 3 pontinhos (...) da sua VM" -ForegroundColor Gray
+  Write-Host "  - Escolha 'Cloud Shell connection' -> abre um terminal DENTRO da VM" -ForegroundColor Gray
+  Pausa "  Terminal da VM aberto no navegador? Volte aqui."
+
+  Write-Host "  [4/4] Cole este comando na VM (botao direito do mouse cola):" -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "  curl -sL https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup-native.sh | sudo bash" -ForegroundColor White
+  Write-Host ""
+  Write-Host "  La na VM, o assistente mostra [1/6..6/6] com OK verde por passo (10-20 min)." -ForegroundColor Gray
+  Write-Host "  No fim aparece 'Pronto! WhatsApp na nuvem' - e a URL sincroniza sozinha com o app." -ForegroundColor Gray
+  Pausa "  Colou o comando na VM? A instalacao continua la."
+
+  Write-Host ""
+  Write-Host "  Quando aparecer 'Pronto! WhatsApp na nuvem' na VM:" -ForegroundColor Green
+  Write-Host "  1. Abra o app do AtendIA" -ForegroundColor Gray
+  Write-Host "  2. Config WhatsApp -> a URL ja esta preenchida -> Testar -> Conectar -> QR Code" -ForegroundColor Gray
+  $r = Read-Host "  Aperte ENTER para abrir o app (ou N para pular)"
+  if ($r -ne "N" -and $r -ne "n") { Start-Process "https://atend7ia.vercel.app" }
+  Write-Host ""
+  Write-Host "  Pronto! O WhatsApp fica na nuvem - seu PC pode desligar." -ForegroundColor Green
+  Write-Host "  Se algo falhar la na VM, rode: sudo atendia-doctor" -ForegroundColor Gray
+  exit 0
+}
+
+# ---------- CAMINHO 2: RAILWAY (GUIADO) ----------
+if ($choice -eq "2") {
+  Write-Host "[AtendIA] Caminho 2 - Railway (mais facil - mas pago)" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  Roteiro rapido (3-5 min): [1/3] Deploy  [2/3] URL  [3/3] QR Code" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  [1/3] Deploy no Railway..." -ForegroundColor Cyan
+  $r = Read-Host "  Aperte ENTER para abrir o Railway no navegador (ou N para pular)"
+  if ($r -ne "N" -and $r -ne "n") { Start-Process "https://railway.app/template/atendia-evolution" }
+  Write-Host "  No site:" -ForegroundColor Gray
+  Write-Host "  - Deploy Now -> entrar com GitHub -> aguardar o build (~3 min)" -ForegroundColor Gray
+  Write-Host "  - Depois: Settings do servico -> Networking -> Generate Domain" -ForegroundColor Gray
+  Write-Host "  - Copie a URL gerada (ex: https://evolution-xxxx.up.railway.app)" -ForegroundColor Gray
+  Pausa "  Com a URL copiada, volte aqui."
+
+  Write-Host "  [2/3] Registrar a URL no app (eu faco isso por voce)..." -ForegroundColor Cyan
+  $railUrl = ""
+  while ($true) {
+    $railUrl = Read-Host "  Cole a URL do Railway aqui"
+    if ($railUrl -match "^https://\S+$") { break }
+    Write-Host "  URL invalida - tem que comecar com https:// e nao ter espacos" -ForegroundColor Yellow
+  }
+  $railUrl = $railUrl.TrimEnd("/")
+  $syncOK = $false
+  try {
+    $body = @{ server_url = $railUrl } | ConvertTo-Json -Depth 3
+    Invoke-WebRequest -Uri "$SupabaseUrl/functions/v1/webhook-whatsapp/relay/update-evolution" -Method POST -Headers @{ Authorization = "Bearer relay-atendia-sk-7f3d"; "Content-Type" = "application/json" } -Body $body -UseBasicParsing -TimeoutSec 15 | Out-Null
+    $syncOK = $true
+    Write-Host "  [2/3] OK! URL sincronizada com o app - nao precisa colar nada la." -ForegroundColor Green
+  } catch {
+    Write-Host "  [2/3] Nao consegui sincronizar automaticamente - voce cola la na frente." -ForegroundColor Yellow
+  }
+
+  Write-Host ""
+  Write-Host "  [3/3] Conectar o WhatsApp..." -ForegroundColor Cyan
+  $r = Read-Host "  Aperte ENTER para abrir o app (ou N para pular)"
+  if ($r -ne "N" -and $r -ne "n") { Start-Process "https://atend7ia.vercel.app" }
+  Write-Host "  No app: Config WhatsApp" -ForegroundColor Gray
+  if ($syncOK) {
+    Write-Host "  - A URL ja aparece preenchida (so confira)" -ForegroundColor Gray
+  } else {
+    Write-Host "  - Cole a URL: $railUrl" -ForegroundColor Gray
+  }
+  Write-Host "  - API Key: atendia123" -ForegroundColor Gray
+  Write-Host "  - Testar -> Conectar WhatsApp -> escaneie o QR Code no celular" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "  Pronto! Nuvem Railway: seu PC pode desligar." -ForegroundColor Green
+  Write-Host "  IA (opcional): P7Store -> Configuracoes -> IA (DeepSeek, Gemini, OpenAI...)." -ForegroundColor Gray
+  Write-Host "  Aviso: apos o credito gratis, o Railway passa a cobrar (~US$ 5/mes)." -ForegroundColor Yellow
+  exit 0
+}
+
+# ==================== CAMINHO 3: DOCKER LOCAL ====================
+Write-Host "[AtendIA] Caminho 3 - Docker Local (controle total)" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  Assistente guiado - 5 passos. Eu aviso cada um:" -ForegroundColor White
 Write-Host "  [1/5] Verificar o Docker Desktop (pausa se precisar de voce)" -ForegroundColor Gray
@@ -117,7 +183,8 @@ if ($env:OS -eq "Windows_NT") {
   $DockerLabel = "Linux"
 }
 
-$dockerVer = docker --version 2>$null
+$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+if ($dockerCmd) { $dockerVer = (& docker --version) 2>$null } else { $dockerVer = $null }
 if ($dockerVer) {
   Write-Host "  [1/5] Docker ja instalado: $dockerVer" -ForegroundColor Green
 } else {
@@ -133,7 +200,8 @@ if ($dockerVer) {
   Write-Host "  4. Volte nesta janela e aperte ENTER - eu verifico sozinho" -ForegroundColor Gray
   while (-not $dockerVer) {
     Pausa "  Instalou e abriu o Docker Desktop? Volte aqui."
-    $dockerVer = docker --version 2>$null
+    $dc = Get-Command docker -ErrorAction SilentlyContinue
+    if ($dc) { $dockerVer = (& docker --version) 2>$null } else { $dockerVer = $null }
     if (-not $dockerVer) {
       Write-Host "  [1/5] Ainda nao encontrei o Docker..." -ForegroundColor Yellow
       Write-Host "  Confira se o Docker Desktop esta instalado e ABERTO (icone da baleia perto do relogio)." -ForegroundColor Gray

@@ -1,6 +1,18 @@
 # atendia-setup
 AtendIA installation scripts
 
+## Assistente de configuração (Windows) — menu dos 3 caminhos
+```powershell
+curl.exe -sL -o setup.ps1 https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup.ps1
+powershell -File setup.ps1
+```
+Mostra o mesmo menu do P7Store (Configurações > WhatsApp):
+- `[1] Nuvem grátis — VM Oracle (Recomendado)`: guia a criação da conta, da VM e do acesso via Cloud Shell, com confirmação em cada etapa;
+- `[2] Railway (mais fácil — mas pago)`: guia o deploy e **sincroniza a URL colada com o app sozinho**;
+- `[3] Docker Local (controle total)`: assistente automático — roteiro [1/5..5/5], progresso e checklist final.
+
+`-Docker` pula o menu e vai direto ao caminho 3.
+
 ## VM Linux na nuvem — SEM Docker (recomendado)
 ```bash
 curl -sL https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup-native.sh | sudo bash
