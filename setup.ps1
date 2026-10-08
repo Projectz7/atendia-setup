@@ -327,33 +327,66 @@ if (-not $pullOK) {
 }
 Write-Host ""
 Write-Host "  [3/5] Imagens prontas. Subindo os containers..." -ForegroundColor Cyan
-docker compose -f docker-compose.evolution.yml build --no-cache tunnel-info
-docker compose -f docker-compose.evolution.yml up -d --force-recreate
-if ($LASTEXITCODE -ne 0) {
-  Write-Host ""
-  Write-Host "  [3/5] Falha ao subir os containers." -ForegroundColor Red
-  Write-Host "  O que fazer: feche e ABRA o Docker Desktop de novo, aguarde ficar pronto e rode este comando outra vez." -ForegroundColor Yellow
-  Read-Host "  Aperte ENTER para fechar"
-  exit 1
-}
-
-Write-Host ""
-Write-Host "  [3/5] Verificando se tudo subiu bem (10 segundos)..." -ForegroundColor Cyan
-Start-Sleep -Seconds 8
-$failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null
-if ($failed) {
-  Write-Host ""
-  Write-Host "  [3/5] Alguns containers falharam. NAO precisa excluir nada." -ForegroundColor Red
-  $failed | ForEach-Object {
+$resetJaFeito = $false
+while ($true) {
+  docker compose -f docker-compose.evolution.yml build --no-cache tunnel-info
+  docker compose -f docker-compose.evolution.yml up -d --force-recreate
+  $upOK = ($LASTEXITCODE -eq 0)
+  $failed = $null
+  if ($upOK) {
     Write-Host ""
-    Write-Host "  === Ultimas linhas de $_ ===" -ForegroundColor Yellow
-    docker logs --tail 8 $_ 2>$null
+    Write-Host "  [3/5] Verificando se tudo subiu bem (10 segundos)..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 8
+    $failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null
+    if (-not $failed) { break }
   }
+
   Write-Host ""
-  Write-Host "  O que fazer: rode este comando de novo - ele re-sobe tudo (nao perde a sessao do WhatsApp)." -ForegroundColor Yellow
-  Write-Host "  Persistiu? Rode: powershell -ExecutionPolicy Bypass -File setup.ps1 -Docker -Reset" -ForegroundColor Yellow
-  Write-Host "  (O -Reset limpa e reinstala tudo - so a IA/modelos ficam salvos.)" -ForegroundColor Gray
-  Write-Host "  Se falhar de novo, COPIE as linhas amarelas acima e mande no suporte - elas dizem o motivo." -ForegroundColor Gray
+  if ($upOK) {
+    Write-Host "  [3/5] Alguns containers falharam. NAO precisa excluir nada." -ForegroundColor Red
+  } else {
+    Write-Host "  [3/5] Falha ao subir os containers." -ForegroundColor Red
+  }
+  $logTxt = @()
+  if ($upOK) {
+    $failed | ForEach-Object {
+      Write-Host ""
+      Write-Host "  === Ultimas linhas de $_ ===" -ForegroundColor Yellow
+      $lin = docker logs --tail 10 $_ 2>$null
+      if ($lin) { $lin | ForEach-Object { Write-Host "  $_" } }
+      $logTxt += "=== $_ ==="
+      $logTxt += $lin
+    }
+  }
+
+  if (-not $resetJaFeito) {
+    Write-Host ""
+    $resp = Read-Host "  Vou limpar e reinstalar tudo agora (so a IA fica salva). ENTER = eu faco / X = sair"
+    if ($resp -eq "X" -or $resp -eq "x") {
+      Write-Host "  Saindo sem alterar nada. Rode este comando de novo quando quiser." -ForegroundColor Yellow
+      exit 1
+    }
+    Write-Host ""
+    Write-Host "  [3/5] Limpando containers, redes, imagens velhas e dados (10-30 s)..." -ForegroundColor Yellow
+    docker compose -f docker-compose.evolution.yml down --volumes --remove-orphans 2>$null
+    docker volume ls --filter "name=atendia" --format "{{.Name}}" 2>$null | Where-Object { $_ -notmatch "ollama" } | ForEach-Object { docker volume rm $_ 2>$null }
+    $oi = docker images --filter "label=com.docker.compose.project=atendia-tunnel" --format "{{.ID}}" 2>$null
+    if ($oi) { $oi | ForEach-Object { docker image rm $_ 2>$null } }
+    $on = docker network ls --filter "label=com.docker.compose.project=atendia-tunnel" --format "{{.ID}}" 2>$null
+    if ($on) { $on | ForEach-Object { docker network rm $_ 2>$null } }
+    $oc = docker ps -a --filter "name=atendia" --format "{{.ID}}" 2>$null
+    if ($oc) { $oc | ForEach-Object { docker stop $_ 2>$null; docker rm $_ 2>$null } }
+    $resetJaFeito = $true
+    Write-Host "  [3/5] Limpo! (a IA ficou salva). Subindo tudo de novo..." -ForegroundColor Green
+    continue
+  }
+
+  $logFile = Join-Path $PWD.Path "erro-atendia.txt"
+  $logTxt | Out-File -FilePath $logFile -Encoding UTF8
+  Write-Host ""
+  Write-Host "  [3/5] Falhou mesmo depois da limpeza - nao e sujeira, e uma causa que preciso ver." -ForegroundColor Red
+  Write-Host "  Salvei o motivo completo em: $logFile" -ForegroundColor Yellow
+  Write-Host "  O que fazer: mande este arquivo (ou a secao amarela acima) para o suporte - eles resolvem com isso." -ForegroundColor Yellow
   Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
