@@ -4,7 +4,7 @@ AtendIA installation scripts
 ## Assistente de configuração (Windows) — menu dos 3 caminhos
 ```powershell
 curl.exe -sL -o setup.ps1 https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup.ps1
-powershell -File setup.ps1
+powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 Mostra o mesmo menu do P7Store (Configurações > WhatsApp):
 - `[1] Nuvem grátis — VM Oracle (Recomendado)`: guia a criação da conta, da VM e do acesso via Cloud Shell, com confirmação em cada etapa;
@@ -31,7 +31,7 @@ Sobe a mesma stack via docker-compose (Postgres + Redis + Evolution + tunnel-inf
 ## Docker Local no seu PC (Windows/Mac/Linux) — assistente guiado
 ```powershell
 curl.exe -sL -o setup.ps1 https://raw.githubusercontent.com/Projectz7/atendia-setup/main/setup.ps1
-powershell -File setup.ps1 -Docker
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Docker
 ```
 Sobe a stack local (Postgres + Redis + Evolution + Ollama CPU + túnel Cloudflare) direto no PC,
 com assistente passo a passo no terminal: mostra o roteiro [1/5..5/5], verifica o Docker Desktop
