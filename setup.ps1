@@ -333,9 +333,15 @@ Start-Sleep -Seconds 8
 $failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null
 if ($failed) {
   Write-Host ""
-  Write-Host "  [3/5] Alguns containers falharam: $failed" -ForegroundColor Red
-  $failed | ForEach-Object { Write-Host "  Veja o motivo com: docker logs $_" -ForegroundColor Gray }
-  Write-Host "  O que fazer: rode este comando de novo - ele limpa e sobe tudo do zero (nao perde a sessao do WhatsApp)." -ForegroundColor Yellow
+  Write-Host "  [3/5] Alguns containers falharam. NAO precisa excluir nada." -ForegroundColor Red
+  $failed | ForEach-Object {
+    Write-Host ""
+    Write-Host "  === Ultimas linhas de $_ ===" -ForegroundColor Yellow
+    docker logs --tail 8 $_ 2>$null
+  }
+  Write-Host ""
+  Write-Host "  O que fazer: rode este comando de novo - ele re-sobe tudo (nao perde a sessao do WhatsApp)." -ForegroundColor Yellow
+  Write-Host "  Se falhar de novo, COPIE as linhas amarelas acima e mande no suporte - elas dizem o motivo." -ForegroundColor Gray
   Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
