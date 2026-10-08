@@ -11,7 +11,7 @@ Mostra o mesmo menu do P7Store (Configurações > WhatsApp):
 - `[2] Railway (mais fácil — mas pago)`: guia o deploy e **sincroniza a URL colada com o app sozinho**;
 - `[3] Docker Local (controle total)`: assistente automático — roteiro [1/5..5/5], progresso e checklist final.
 
-`-Docker` pula o menu e vai direto ao caminho 3.
+`-Docker` pula o menu e vai direto ao caminho 3. `-Reset` limpa e reinstala tudo (mantém só os modelos da IA); `-Clean` apaga absolutamente tudo (sessão + modelos).
 
 ## VM Linux na nuvem — SEM Docker (recomendado)
 ```bash

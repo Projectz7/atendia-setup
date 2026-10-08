@@ -2,7 +2,8 @@ param(
   [string]$FolderName = "atendia-tunnel",
   [switch]$Docker,
   [switch]$NoReload,
-  [switch]$Clean
+  [switch]$Clean,
+  [switch]$Reset
 )
 
 $SupabaseUrl = "https://pnijzmqygibhwbcnkklm.supabase.co"
@@ -278,6 +279,15 @@ if ($Clean) {
   docker compose -f docker-compose.evolution.yml down --volumes --remove-orphans 2>$null
   docker volume ls --filter "name=atendia" --format "{{.Name}}" 2>$null | ForEach-Object { docker volume rm $_ 2>$null }
   Write-Host "  [3/5] Volumes removidos (modelos Ollama e dados DB)" -ForegroundColor Gray
+} elseif ($Reset) {
+  Write-Host "  [3/5] Modo -Reset: limpando containers, redes, imagens velhas e volumes de dados..." -ForegroundColor Yellow
+  docker compose -f docker-compose.evolution.yml down --volumes --remove-orphans 2>$null
+  docker volume ls --filter "name=atendia" --format "{{.Name}}" 2>$null | Where-Object { $_ -notmatch "ollama" } | ForEach-Object { docker volume rm $_ 2>$null }
+  $oldImgs = docker images --filter "label=com.docker.compose.project=atendia-tunnel" --format "{{.ID}}" 2>$null
+  if ($oldImgs) { $oldImgs | ForEach-Object { docker image rm $_ 2>$null } }
+  $oldNets = docker network ls --filter "label=com.docker.compose.project=atendia-tunnel" --format "{{.ID}}" 2>$null
+  if ($oldNets) { $oldNets | ForEach-Object { docker network rm $_ 2>$null } }
+  Write-Host "  [3/5] Limpo! So a IA (modelos Ollama) ficou salva - tudo mais sera reinstalado." -ForegroundColor Green
 } else {
   Write-Host "  [3/5] Volumes preservados (sessao WhatsApp + modelo Ollama mantidos)" -ForegroundColor Green
 }
@@ -341,6 +351,8 @@ if ($failed) {
   }
   Write-Host ""
   Write-Host "  O que fazer: rode este comando de novo - ele re-sobe tudo (nao perde a sessao do WhatsApp)." -ForegroundColor Yellow
+  Write-Host "  Persistiu? Rode: powershell -ExecutionPolicy Bypass -File setup.ps1 -Docker -Reset" -ForegroundColor Yellow
+  Write-Host "  (O -Reset limpa e reinstala tudo - so a IA/modelos ficam salvos.)" -ForegroundColor Gray
   Write-Host "  Se falhar de novo, COPIE as linhas amarelas acima e mande no suporte - elas dizem o motivo." -ForegroundColor Gray
   Read-Host "  Aperte ENTER para fechar"
   exit 1
@@ -404,6 +416,7 @@ if (-not $tunnelUrl) {
   Write-Host "  [5/5] O tunel nao subiu agora." -ForegroundColor Red
   Write-Host "  O que fazer: veja o motivo com:  docker logs atendia-tunnel-tunnel-info-1" -ForegroundColor Gray
   Write-Host "  Depois rode este comando de novo - ele limpa e sobe tudo de novo (nao perde a sessao)." -ForegroundColor Yellow
+  Write-Host "  Persistiu? Rode: powershell -ExecutionPolicy Bypass -File setup.ps1 -Docker -Reset (mantem so a IA)" -ForegroundColor Yellow
   Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
@@ -460,6 +473,7 @@ if (-not $NoReload) {
 }
 Write-Host "  - Se o PC reiniciar: abra o Docker Desktop e rode ESTE comando de novo (a URL muda e re-sincroniza sozinho)" -ForegroundColor Gray
 Write-Host "  - Para producao estavel com PC desligado: use a VM Oracle gratis (P7Store > Configuracoes > WhatsApp > modo 1)" -ForegroundColor Gray
+Write-Host "  - Para limpar e reinstalar tudo (erro persistente - mantem so a IA): setup.ps1 -Docker -Reset" -ForegroundColor Gray
 Write-Host "  - Para comecar do zero (apaga tudo): setup.ps1 -Docker -Clean" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  PROXIMO PASSO - conectar o WhatsApp (1 minuto):" -ForegroundColor Green
