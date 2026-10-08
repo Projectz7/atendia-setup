@@ -169,10 +169,10 @@ Write-Host "  [1/5] Verificando o Docker Desktop..." -ForegroundColor Cyan
 
 if ($env:OS -eq "Windows_NT") {
   if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
-    $DockerUrl = "https://docs.docker.com/desktop/install/windows-install/"
+    $DockerUrl = "https://desktop.docker.com/win/main/arm64/Docker%20Desktop%20Installer-arm64.exe"
     $DockerLabel = "Windows ARM64"
   } else {
-    $DockerUrl = "https://www.docker.com/products/docker-desktop/"
+    $DockerUrl = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
     $DockerLabel = "Windows x64"
   }
 } elseif ($env:OS -eq "Darwin") {
@@ -194,7 +194,7 @@ if ($dockerVer) {
   if ($abrir -ne "N" -and $abrir -ne "n") { Start-Process $DockerUrl }
   Write-Host ""
   Write-Host "  Como instalar (so na primeira vez):" -ForegroundColor White
-  Write-Host "  1. Na pagina que abriu, baixe a versao mais recente e instale (proximo-proximo-concluir)" -ForegroundColor Gray
+  Write-Host "  1. O download do instalador comecou no navegador - ao terminar, abra o arquivo baixado e instale (proximo-proximo-concluir)" -ForegroundColor Gray
   Write-Host "  2. Se pedir para REINICIAR o PC, reinicie" -ForegroundColor Gray
   Write-Host "  3. Depois, ABRA o Docker Desktop pelo icone e aguarde ele terminar de abrir" -ForegroundColor Gray
   Write-Host "  4. Se o Docker abrir e fechar com ERRO: feche tudo, rode no PowerShell:" -ForegroundColor Gray
