@@ -165,6 +165,73 @@ Write-Host ""
 Write-Host "  IMPORTANTE: nao feche esta janela durante a instalacao." -ForegroundColor Yellow
 Write-Host ""
 
+# ---------- PRE-REQUISITOS Windows (WSL 2 + Plataforma de VM) ----------
+if ($env:OS -eq "Windows_NT") {
+  Write-Host ""
+  Write-Host "  [1/5] Conferindo os pre-requisitos do Windows (WSL)..." -ForegroundColor Cyan
+  $temVm  = [bool](Get-Service vmcompute -ErrorAction SilentlyContinue)
+  $temWsl = [bool](Get-Command wsl.exe -ErrorAction SilentlyContinue)
+
+  if (-not $temVm) {
+    $vtOn = $null
+    try { $vtOn = (Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled } catch {}
+    if ($vtOn -eq $false) {
+      Write-Host ""
+      Write-Host "  A VIRTUALIZACAO do processador esta DESLIGADA na BIOS - so voce pode ativar." -ForegroundColor Red
+      Write-Host "  Como ativar: desligue o PC, ligue de novo e aperte a tecla da BIOS (DEL, F2 ou F12)." -ForegroundColor White
+      Write-Host "  Procure Virtualization / VT-x / SVM Mode e mude para Enabled. Salve e ligue o PC." -ForegroundColor White
+      Write-Host "  Depois rode este comando de novo que eu continuo daqui." -ForegroundColor White
+      Read-Host "  Aperte ENTER para fechar"
+      exit 1
+    }
+  }
+
+  if (-not ($temWsl -and $temVm)) {
+    Write-Host "  Faltam recursos do Windows (WSL 2 / Plataforma de Maquina Virtual)." -ForegroundColor Yellow
+    Write-Host "  Vou instala-los agora. Vai abrir uma janela pedindo ADMINISTRADOR:" -ForegroundColor White
+    Write-Host "  clique em SIM e espere terminar (alguns minutos)." -ForegroundColor White
+    $fixPath = Join-Path $env:TEMP "atendia-wsl-fix.ps1"
+    @'
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -All -NoRestart
+Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart
+netsh winsock reset
+Write-Host ""
+Write-Host "CONCLUIDO!" -ForegroundColor Green
+Read-Host "Aperte ENTER para fechar esta janela"
+'@ | Set-Content -Path $fixPath -Encoding UTF8
+    try {
+      Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$fixPath`""
+    } catch {
+      Write-Host ""
+      Write-Host "  Voce cancelou a janela de administrador - sem ela nao consigo instalar o WSL." -ForegroundColor Red
+      Write-Host "  Rode este comando de novo e clique em SIM quando a janela aparecer." -ForegroundColor Yellow
+      Read-Host "  Aperte ENTER para fechar"
+      exit 1
+    }
+    $temWsl2 = [bool](Get-Command wsl.exe -ErrorAction SilentlyContinue)
+    $temVm2  = [bool](Get-Service vmcompute -ErrorAction SilentlyContinue)
+    if ($temWsl2 -and $temVm2) {
+      Write-Host "  OK! Recursos do Windows instalados." -ForegroundColor Green
+    } else {
+      Write-Host ""
+      Write-Host "  Recursos instalados! Agora e OBRIGATORIO reiniciar o PC (normal apos essa instalacao)." -ForegroundColor Yellow
+      Write-Host "  Depois de reiniciar, abra o PowerShell e rode ESTE comando de novo - eu continuo daqui." -ForegroundColor White
+      Read-Host "  Aperte ENTER para fechar"
+      exit 0
+    }
+  } else {
+    Write-Host "  [1/5] WSL 2 e virtualizacao OK." -ForegroundColor Green
+  }
+
+  $livreGB = [math]::Round((Get-PSDrive C).Free / 1GB)
+  if ($livreGB -lt 15) {
+    Write-Host ""
+    Write-Host "  ATENCAO: pouco espaco no disco C: ($livreGB GB livres). A instalacao usa ~12 GB." -ForegroundColor Yellow
+    Write-Host "  Se nao couber, libere espaco antes de continuar." -ForegroundColor Gray
+  }
+  Write-Host ""
+}
+
 # ---------- PASSO 1/5: Docker Desktop ----------
 Write-Host "  [1/5] Verificando o Docker Desktop..." -ForegroundColor Cyan
 

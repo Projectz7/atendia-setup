@@ -34,9 +34,12 @@ curl.exe -sL -o setup.ps1 https://raw.githubusercontent.com/Projectz7/atendia-se
 powershell -ExecutionPolicy Bypass -File setup.ps1 -Docker
 ```
 Sobe a stack local (Postgres + Redis + Evolution + Ollama CPU + túnel Cloudflare) direto no PC,
-com assistente passo a passo no terminal: mostra o roteiro [1/5..5/5], verifica o Docker Desktop
-(pausa esperando você), baixa os arquivos, sobe os containers, testa o túnel pela internet e
-sincroniza as URLs com o app sozinho. Sessão do WhatsApp salva em volumes: re-rodar é seguro;
+com assistente passo a passo no terminal: mostra o roteiro [1/5..5/5], confere os pré-requisitos
+(WSL 2 / Plataforma de VM — instala sozinho com 1 clique de administrador se faltar),
+verifica o Docker Desktop (pausa esperando você), baixa os arquivos, sobe os containers,
+testa o túnel pela internet e sincroniza as URLs com o app sozinho. Se containers falham, ele
+mostra o log, oferece e executa a limpeza + reinstalação sozinho (mantém só a IA). Sessão do
+WhatsApp salva em volumes: re-rodar é seguro; `-Reset` limpa e reinstala tudo (mantém a IA) e
 `-Clean` apaga tudo (sessão + modelos). Precisa de Docker Desktop e PC ligado enquanto usar.
 
 
