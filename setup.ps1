@@ -407,7 +407,11 @@ while ($true) {
     Write-Host ""
     Write-Host "  [3/5] Verificando se tudo subiu bem (10 segundos)..." -ForegroundColor Cyan
     Start-Sleep -Seconds 8
-    $failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null
+    # Somente containers DE SERVICO do compose contam (restos de build tem nome aleatorio e nao sao falha)
+    $failed = docker compose -f docker-compose.evolution.yml ps -a --status exited --format "{{.Name}}" 2>$null
+    if (-not $failed) {
+      $failed = docker ps -a --filter "label=com.docker.compose.project=atendia-tunnel" --filter "status=exited" --format "{{.Names}}" 2>$null | Where-Object { $_ -like "atendia-tunnel*" }
+    }
     if (-not $failed) { break }
   }
 
@@ -461,7 +465,7 @@ while ($true) {
   exit 1
 }
 Write-Host "  [3/5] OK! Containers no ar:" -ForegroundColor Green
-docker ps --filter "label=com.docker.compose.project=atendia-tunnel" --format "   {{.Names}}  [{{.Status}}]" 2>$null
+docker compose -f docker-compose.evolution.yml ps --format "   {{.Name}}  [{{.State}}]" 2>$null
 
 # ---------- PASSO 4/5: modelo da IA ----------
 Write-Host ""
