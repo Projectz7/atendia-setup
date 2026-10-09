@@ -394,6 +394,9 @@ if (-not $pullOK) {
 }
 Write-Host ""
 Write-Host "  [3/5] Imagens prontas. Subindo os containers..." -ForegroundColor Cyan
+# O volume dos modelos (ollama) e declarado EXTERNO no yml - precisa existir ANTES do compose up.
+# docker volume create e idempotente: se o volume ja existe, nao faz nada (modelos preservados).
+docker volume create atendia-tunnel_ollama_data | Out-Null
 $resetJaFeito = $false
 while ($true) {
   docker compose -f docker-compose.evolution.yml build --no-cache tunnel-info
