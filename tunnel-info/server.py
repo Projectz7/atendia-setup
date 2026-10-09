@@ -1,10 +1,12 @@
-import subprocess, re, threading, json, urllib.request, os, signal
+import subprocess, re, threading, json, urllib.request, os, signal, time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 TUNNEL_URL = ""
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434")
 EVO_URL = os.environ.get("EVO_URL", "http://evolution-api:8080")
 PORT = int(os.environ.get("PORT", "9876"))
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://pnijzmqygibhwbcnkklm.supabase.co")
+RELAY_SECRET = os.environ.get("RELAY_SECRET", "relay-atendia-sk-7f3d")
 
 class Handler(BaseHTTPRequestHandler):
     def cors_headers(self):
@@ -86,24 +88,60 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+def sync_tunnel(url):
+    # Sincroniza a URL do tunel com o banco (mesmos endpoints que o assistente usa no [5/5]).
+    # Assim, depois de reiniciar o PC, o AtendIA volta a funcionar SOZINHO - a URL nova
+    # do trycloudflare substitui a antiga e ninguem precisa rodar nada de novo.
+    ok = True
+    for path, key, val in [
+        ("/functions/v1/webhook-whatsapp/relay/update-tunnel", "tunnel_url", url),
+        ("/functions/v1/webhook-whatsapp/relay/update-evolution", "server_url", url + "/evolution"),
+    ]:
+        try:
+            req = urllib.request.Request(
+                SUPABASE_URL + path,
+                data=json.dumps({key: val}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + RELAY_SECRET},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as r:
+                r.read()
+            print(f"[sync] {key} -> {val}", flush=True)
+        except Exception as e:
+            print(f"[sync] {key} falhou (tento de novo): {e}", flush=True)
+            ok = False
+    return ok
+
+def sync_loop():
+    last = None
+    while True:
+        time.sleep(10)
+        if TUNNEL_URL and TUNNEL_URL != last:
+            if sync_tunnel(TUNNEL_URL):
+                last = TUNNEL_URL
+
 def start_cloudflared():
     global TUNNEL_URL
-    try:
-        proc = subprocess.Popen(
-            ["cloudflared", "tunnel", "--url", f"http://localhost:{PORT}"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1
-        )
-        for line in proc.stdout:
-            m = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
-            if m:
-                TUNNEL_URL = m.group()
-                print(f"[tunnel] URL: {TUNNEL_URL}")
-                break
-    except Exception as e:
-        print(f"[tunnel] error: {e}")
+    while True:
+        try:
+            proc = subprocess.Popen(
+                ["cloudflared", "tunnel", "--url", f"http://localhost:{PORT}"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1
+            )
+            for line in proc.stdout:
+                m = re.search(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', line)
+                if m:
+                    TUNNEL_URL = m.group()
+                    print(f"[tunnel] URL: {TUNNEL_URL}", flush=True)
+                    break
+            proc.wait()  # cloudflared caiu -> reinicia sozinho (URL nova -> sync_loop atualiza o banco)
+        except Exception as e:
+            print(f"[tunnel] error: {e}", flush=True)
+        time.sleep(5)
 
 if __name__ == "__main__":
-    print(f"[tunnel-info] listening on {PORT}")
+    print(f"[tunnel-info] listening on {PORT}", flush=True)
     threading.Thread(target=start_cloudflared, daemon=True).start()
+    threading.Thread(target=sync_loop, daemon=True).start()
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

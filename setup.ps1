@@ -575,10 +575,14 @@ Write-Host "  API Key: atendia123" -ForegroundColor White
 Write-Host ""
 Write-Host "  IMPORTANTE - MODO LOCAL:" -ForegroundColor Yellow
 Write-Host "  - DEIXE ESTA JANELA ABERTA (pode minimizar) - o WhatsApp usa o mensageiro que esta rodando aqui" -ForegroundColor Yellow
+Write-Host "  - NAO clique em 'Quit Docker Desktop' no icone da bandeja - isso PARA o atendimento" -ForegroundColor Yellow
+Write-Host "    (fechar ou minimizar a janela pode: ele continua rodando escondido)" -ForegroundColor Gray
 if (-not $NoReload) {
   Write-Host "  - Relay em background (Job $($job.Id))" -ForegroundColor Gray
 }
-Write-Host "  - Se o PC reiniciar: abra o Docker Desktop e rode ESTE comando de novo (a URL muda e re-sincroniza sozinho)" -ForegroundColor Gray
+Write-Host "  - Se o PC reiniciar: tudo volta SOZINHO - o Docker abre com o Windows (deixe a opcao" -ForegroundColor Gray
+Write-Host "    'Start Docker Desktop when you sign in' LIGADA) e a URL nova sincroniza automatica." -ForegroundColor Gray
+Write-Host "  - So rode este comando de novo se algo der errado de verdade." -ForegroundColor Gray
 Write-Host "  - Para producao estavel com PC desligado: use a VM Oracle gratis (P7Store > Configuracoes > WhatsApp > modo 1)" -ForegroundColor Gray
 Write-Host "  - Para limpar e reinstalar tudo (erro persistente - mantem so a IA): setup.ps1 -Docker -Reset" -ForegroundColor Gray
 Write-Host "  - Para comecar do zero (apaga tudo): setup.ps1 -Docker -Clean" -ForegroundColor Gray

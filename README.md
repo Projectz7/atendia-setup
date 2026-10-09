@@ -41,5 +41,8 @@ testa o túnel pela internet e sincroniza as URLs com o app sozinho. Se containe
 mostra o log, oferece e executa a limpeza + reinstalação sozinho (mantém só a IA). Sessão do
 WhatsApp salva em volumes: re-rodar é seguro; `-Reset` limpa e reinstala tudo (mantém a IA) e
 `-Clean` apaga tudo (sessão + modelos). Precisa de Docker Desktop e PC ligado enquanto usar.
+Depois de reiniciar o PC, tudo volta sozinho: o Docker abre com o Windows, os containers sobem e a
+URL nova do túnel sincroniza com o app automaticamente. Só não use "Quit Docker Desktop" na bandeja
+(isso para o atendimento — fechar/minimizar a janela não para nada).
 
 
