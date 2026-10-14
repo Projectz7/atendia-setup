@@ -3,7 +3,8 @@ param(
   [switch]$Docker,
   [switch]$NoReload,
   [switch]$Clean,
-  [switch]$Reset
+  [switch]$Reset,
+  [switch]$Limpar
 )
 
 $SupabaseUrl = "https://pnijzmqygibhwbcnkklm.supabase.co"
@@ -20,6 +21,106 @@ function Pausa([string]$msg) {
   if ($msg) { Write-Host $msg -ForegroundColor White }
   Read-Host "  Aperte ENTER para continuar" | Out-Null
   Write-Host ""
+}
+
+# Relatorio de erro na AREA DE TRABALHO (nunca em system32 quando roda como admin).
+# O usuario anexa no WhatsApp do suporte - diagnostico completo sem esforco.
+function Dump-Erro([string]$motivo) {
+  try {
+    $desk = [Environment]::GetFolderPath('Desktop')
+    $file = Join-Path $desk "ATENDIA-ERRO.txt"
+    $lines = @()
+    $lines += "AtendIA - relatorio de erro automatico"
+    $lines += "Quando: $(Get-Date -Format 'yyyy-MM-dd HH:mm')  |  Motivo: $motivo"
+    $lines += ""
+    $lines += "== TODOS os containers =="
+    $lines += (docker ps -a --format "{{.Names}}  |  {{.Image}}  |  {{.Status}}") 2>$null
+    $lines += ""
+    $lines += "== Estado do compose (atendia-tunnel) =="
+    $lines += (docker compose -f docker-compose.evolution.yml ps -a) 2>$null
+    $lines += ""
+    $lines += "== Espaco em disco C: =="
+    $lines += "Livre: $([math]::Round((Get-PSDrive C).Free/1GB,1)) GB"
+    $lines += ""
+    $lines += "== Versoes do Docker =="
+    $lines += (docker version --format "Client {{.Client.Version}} / Server {{.Server.Version}}") 2>$null
+    $lines += ""
+    $lines += "== Logs dos containers parados (ultimas 60 linhas de cada) =="
+    $bad = docker ps -a --filter "status=exited" --format "{{.Names}}" 2>$null
+    foreach ($b in $bad) { $lines += "--- $b ---"; $lines += (docker logs --tail 60 $b) 2>$null; $lines += "" }
+    $lines | Set-Content -Path $file -Encoding UTF8
+    Write-Host "  Salvei um relatorio completo na AREA DE TRABALHO: ATENDIA-ERRO.txt" -ForegroundColor Yellow
+    Write-Host "  Mande esse arquivo pro suporte (pode anexar no WhatsApp) - ele resolve com isso." -ForegroundColor Gray
+  } catch { Write-Host "  (nao consegui salvar o relatorio: $_)" -ForegroundColor DarkGray }
+}
+
+if ($Limpar) {
+  Write-Host ""
+  Write-Host "  MODO LIMPEZA TOTAL DO DOCKER" -ForegroundColor Magenta
+  Write-Host "  Apaga TUDO que o Docker tem neste PC: containers, volumes, imagens," -ForegroundColor White
+  Write-Host "  redes, cache de build e instalacoes anteriores do AtendIA." -ForegroundColor White
+  Write-Host ""
+  Write-Host "  Sobre nomes estranhos tipo 'beautiful_mestorf' ou 'heuristic_blackwell':" -ForegroundColor Gray
+  Write-Host "  sao COZINHAS TEMPORARIAS que o Docker monta na hora de construir as imagens" -ForegroundColor Gray
+  Write-Host "  (build). Nao sao virus nem programas instalados - sao resto de obra." -ForegroundColor Gray
+  Write-Host "  Este modo varre tudo isso tambem." -ForegroundColor Gray
+  Write-Host ""
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-Host "  Docker nao esta instalado - nao ha nada para limpar. Tudo certo!" -ForegroundColor Green
+    Read-Host "  Aperte ENTER para fechar" | Out-Null
+    exit 0
+  }
+  docker info *> $null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "  O Docker Desktop esta fechado. Abra-o (baleia na bandeja, espere o verde)" -ForegroundColor Yellow
+    Write-Host "  e rode este comando de novo." -ForegroundColor Yellow
+    Read-Host "  Aperte ENTER para fechar" | Out-Null
+    exit 0
+  }
+  Write-Host ""
+  Write-Host "  O QUE EXISTE AGORA (inventario completo, antes de apagar):" -ForegroundColor Cyan
+  Write-Host ""
+  $allC = docker ps -a --format "   {{.Names}}  |  {{.Image}}  |  {{.Status}}" 2>$null
+  if ($allC) { Write-Host "   CONTAINERS:" -ForegroundColor White; $allC | ForEach-Object { Write-Host $_ } } else { Write-Host "   CONTAINERS: nenhum" -ForegroundColor Gray }
+  Write-Host ""
+  $allV = docker volume ls --format "   {{.Name}}" 2>$null
+  if ($allV) { Write-Host "   VOLUMES (dados guardados):" -ForegroundColor White; $allV | ForEach-Object { Write-Host $_ } } else { Write-Host "   VOLUMES: nenhum" -ForegroundColor Gray }
+  Write-Host ""
+  $allI = docker images --format "   {{.Repository}}:{{.Tag}}  ({{.Size}})" 2>$null
+  if ($allI) { Write-Host "   IMAGENS (programas baixados):" -ForegroundColor White; $allI | ForEach-Object { Write-Host $_ } } else { Write-Host "   IMAGENS: nenhuma" -ForegroundColor Gray }
+  Write-Host ""
+  Write-Host "  AVISO: o WhatsApp local desconecta e a IA local some ate reinstalar." -ForegroundColor Yellow
+  Write-Host "  As conversas dos clientes FICAM salvas no app (sao guardadas na nuvem)." -ForegroundColor Gray
+  Write-Host "  Depois da limpeza, rode a instalacao de novo (baixa tudo do zero, 15-30 min)" -ForegroundColor Gray
+  Write-Host "  e o WhatsApp pede um novo QR Code." -ForegroundColor Gray
+  Write-Host ""
+  $conf = Read-Host "  Digite APAGAR (em maiusculas) para confirmar, ou ENTER para cancelar"
+  if ($conf -ne "APAGAR") {
+    Write-Host "  Cancelado - nada foi apagado." -ForegroundColor Green
+    Read-Host "  Aperte ENTER para fechar" | Out-Null
+    exit 0
+  }
+  Write-Host ""
+  Write-Host "  Apagando containers..." -ForegroundColor Cyan
+  $ids = docker ps -aq 2>$null
+  if ($ids) { docker rm -f $ids 2>$null }
+  Write-Host "  Apagando volumes..." -ForegroundColor Cyan
+  $vols = docker volume ls -q 2>$null
+  if ($vols) { docker volume rm $vols 2>$null }
+  Write-Host "  Apagando imagens..." -ForegroundColor Cyan
+  $imgs = docker images -aq 2>$null
+  if ($imgs) { docker image rm -f $imgs 2>$null }
+  Write-Host "  Apagando redes, cache de build e resto de obra..." -ForegroundColor Cyan
+  docker network prune -f *> $null
+  docker builder prune -a -f *> $null
+  docker system prune -f *> $null
+  Write-Host ""
+  $leftC = @(docker ps -aq 2>$null); $leftV = @(docker volume ls -q 2>$null); $leftI = @(docker images -aq 2>$null)
+  Write-Host "  RESULTADO FINAL: $($leftC.Count) containers, $($leftV.Count) volumes, $($leftI.Count) imagens." -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  Tudo limpo! Agora instale do zero com as 2 linhas do assistente." -ForegroundColor White
+  Read-Host "  Aperte ENTER para fechar" | Out-Null
+  exit 0
 }
 
 if ($Docker) {
@@ -389,6 +490,7 @@ if (-not $pullOK) {
   Write-Host "  [3/5] Nao consegui baixar as imagens apos 3 tentativas." -ForegroundColor Red
   Write-Host "  O que fazer: confira sua internet (ou a VPN, se usar) e rode ESTE MESMO comando de novo." -ForegroundColor Yellow
   Write-Host "  Nada quebrou - e so tentar outra vez mais tarde." -ForegroundColor Gray
+  Dump-Erro "download-imagens-falhou"
   Read-Host "  Aperte ENTER para fechar"
   exit 1
 }
@@ -455,11 +557,12 @@ while ($true) {
     continue
   }
 
-  $logFile = Join-Path $PWD.Path "erro-atendia.txt"
+  $logFile = Join-Path ([Environment]::GetFolderPath('Desktop')) "erro-atendia.txt"
   $logTxt | Out-File -FilePath $logFile -Encoding UTF8
   Write-Host ""
   Write-Host "  [3/5] Falhou mesmo depois da limpeza - nao e sujeira, e uma causa que preciso ver." -ForegroundColor Red
-  Write-Host "  Salvei o motivo completo em: $logFile" -ForegroundColor Yellow
+  Write-Host "  Salvei o motivo completo na AREA DE TRABALHO: erro-atendia.txt" -ForegroundColor Yellow
+  Dump-Erro "containers-falharam-apos-limpeza"
   Write-Host "  O que fazer: mande este arquivo (ou a secao amarela acima) para o suporte - eles resolvem com isso." -ForegroundColor Yellow
   Read-Host "  Aperte ENTER para fechar"
   exit 1
@@ -586,6 +689,17 @@ Write-Host "  - So rode este comando de novo se algo der errado de verdade." -Fo
 Write-Host "  - Para producao estavel com PC desligado: use a VM Oracle gratis (P7Store > Configuracoes > WhatsApp > modo 1)" -ForegroundColor Gray
 Write-Host "  - Para limpar e reinstalar tudo (erro persistente - mantem so a IA): setup.ps1 -Docker -Reset" -ForegroundColor Gray
 Write-Host "  - Para comecar do zero (apaga tudo): setup.ps1 -Docker -Clean" -ForegroundColor Gray
+Write-Host "  - Para apagar TUDO do Docker (containers, volumes, imagens, resto de build):" -ForegroundColor Gray
+Write-Host "    setup.ps1 -Limpar   (mostra inventario e pede confirmacao antes)" -ForegroundColor Gray
+Write-Host ""
+Write-Host "  O QUE ESTA RODANDO AGORA (transparencia total):" -ForegroundColor Cyan
+Write-Host "   - postgres ....... banco de dados do sistema (conversas, config)" -ForegroundColor Gray
+Write-Host "   - redis .......... fila rapida interna da Evolution" -ForegroundColor Gray
+Write-Host "   - evolution ...... ponte do WhatsApp (gera o QR, envia e recebe mensagens)" -ForegroundColor Gray
+Write-Host "   - ollama ......... IA local (responde os clientes)" -ForegroundColor Gray
+Write-Host "   - tunnel-info .... tunel publico + auto-sync da URL + painel na porta 9876" -ForegroundColor Gray
+Write-Host "   Nomes aleatorios tipo 'beautiful_mestorf' (parados) = temporarios de BUILD do Docker:" -ForegroundColor Gray
+Write-Host "   nao sao virus nem programas - sao 'cozinhas' descartaveis usadas pra montar as imagens." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  PROXIMO PASSO - conectar o WhatsApp (1 minuto):" -ForegroundColor Green
 Write-Host "  1. Abri o app do AtendIA no navegador pra voce" -ForegroundColor White

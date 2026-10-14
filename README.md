@@ -45,4 +45,20 @@ Depois de reiniciar o PC, tudo volta sozinho: o Docker abre com o Windows, os co
 URL nova do túnel sincroniza com o app automaticamente. Só não use "Quit Docker Desktop" na bandeja
 (isso para o atendimento — fechar/minimizar a janela não para nada).
 
+### Limpeza total do Docker (`-Limpar`)
+
+Quando algo desanda e você quer começar do zero absoluto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Limpar
+```
+
+Ele mostra o **inventário completo** (todos os containers, volumes e imagens com nomes e tamanhos),
+explica o que é cada coisa, e só apaga depois que você digitar `APAGAR`. Remove containers, volumes,
+imagens, redes, cache de build e os "restos de obra" do Docker (containers parados de nome aleatório
+tipo `beautiful_mestorf`/`heuristic_blackwell` — temporários de BUILD, não são vírus nem programas).
+Depois é só rodar a instalação de novo. Nas falhas de instalação, o assistente gera sozinho o
+`ATENDIA-ERRO.txt` na Área de Trabalho com todo o diagnóstico (containers, logs, disco, versões) —
+basta anexar no suporte.
+
 
