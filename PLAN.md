@@ -1,0 +1,12 @@
+﻿# atendia-setup — setup.ps1 à prova de cenário (Docker Local + Evolution API)
+
+**Objetivo (2 linhas):** Reinstalação limpa de verdade: toda reentrada no caminho Docker varre o lixo (cozinhas de build, imagens dangling, cache, containers órfãos) mantendo apenas os modelos da IA (volume Ollama), e o fluxo de instalação sobrevive a qualquer cenário comum (TLS antigo, system32, Docker antigo, portas ocupadas, imagem corrompida, túnel lento). Interface e flags idênticas — aba WhatsApp do P7Store não muda.
+
+## Etapas (priorizadas por dependência)
+
+1. [x] **Base à prova de cenário** — TLS 1.2 explícito no topo (erro clássico do PowerShell 5.1); pasta base fixa em `%USERPROFILE%\atendia-tunnel` (nunca system32 quando admin); checar `docker compose` disponível (Docker antigo) e engine Linux (`OSType`) no wait do engine; padrões de erro ampliados ("cannot connect", pipe, timeout) + dicas direcionadas (wsl --update, Linux containers) no loop de espera.
+2. [x] **Limpeza unificada `Limpar-Instalacao`** — função única usada por -Reset (mantém IA), -Clean (apaga tudo) e pela limpeza automática pós-falha: compose down + containers do projeto/atendia + cozinhas de build (`moby/buildkit` paradas, nome aleatório) + volumes `atendia*` (menos `*ollama*` quando mantém IA) + imagens da stack (postgres/redis/evolution/tunnel-info; ollama só no wipe) + dangling + `builder prune -a` + conferência final com contagem.
+3. [x] **Varredura segura no fluxo default** — re-rodar sem flag também varre lixo inofensivo (build leftovers + dangling) e resolve conflito de porta 8080 E 9876 sem depender do filtro `publish=` (parse de `{{.Ports}}`), avisando processo nativo que segurar a porta.
+4. [x] **Instalação resiliente** — pull 3 tentativas varrendo lixo entre elas e removendo imagens da stack na última; `up` até 3 tentativas com `Limpar-Instalacao` entre cada; sucesso = 0 exited + todos os containers do projeto rodando (2 checks com 8s, tolera ollama profile); log inline na falha; túnel espera 3 min e imprime log do tunnel-info; Ollama acha container pelo label do projeto (não ancestor) e espera estar running antes do pull.
+5. [x] **Dump-Erro rico** — inclui `wsl --status`, `wsl -l -v`, `docker compose version`, `docker system df`, dono nativo das portas 8080/9876 e `compose logs` de todos os serviços.
+6. [x] **Docs + entrega** — README (comportamento novo do -Reset/default), dica de -Limpar na aba WhatsApp do P7Store, validar sintaxe (PSParser), commit + push origin/main.

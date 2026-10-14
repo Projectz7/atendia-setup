@@ -11,7 +11,12 @@ Mostra o mesmo menu do P7Store (Configurações > WhatsApp):
 - `[2] Railway (mais fácil — mas pago)`: guia o deploy e **sincroniza a URL colada com o app sozinho**;
 - `[3] Docker Local (controle total)`: assistente automático — roteiro [1/5..5/5], progresso e checklist final.
 
-`-Docker` pula o menu e vai direto ao caminho 3. `-Reset` limpa e reinstala tudo (mantém só os modelos da IA); `-Clean` apaga absolutamente tudo (sessão + modelos).
+`-Docker` pula o menu e vai direto ao caminho 3. Toda (re)instalação começa varrendo o
+"lixo de obra" do Docker (cozinhas de build de nome aleatório tipo `beautiful_mestorf`
+e imagens quebradas/dangling) e resolvendo conflito das portas 8080/9876. `-Reset`
+limpa e reinstala tudo **menos a IA** (containers, volumes de dados, imagens, cache de
+build — os modelos Ollama ficam); `-Clean` apaga absolutamente tudo (sessão + modelos);
+`-Limpar` varre o Docker inteiro do PC (inventário + confirmação `APAGAR`).
 
 ## VM Linux na nuvem — SEM Docker (recomendado)
 ```bash
@@ -38,8 +43,10 @@ com assistente passo a passo no terminal: mostra o roteiro [1/5..5/5], confere o
 (WSL 2 / Plataforma de VM — instala sozinho com 1 clique de administrador se faltar),
 verifica o Docker Desktop (pausa esperando você), baixa os arquivos, sobe os containers,
 testa o túnel pela internet e sincroniza as URLs com o app sozinho. Se containers falham, ele
-mostra o log, oferece e executa a limpeza + reinstalação sozinho (mantém só a IA). Sessão do
-WhatsApp salva em volumes: re-rodar é seguro; `-Reset` limpa e reinstala tudo (mantém a IA) e
+mostra o log, oferece e executa a limpeza + reinstalação sozinho — até 3 tentativas, limpando
+tudo menos a IA entre cada uma (containers, volumes de dados, imagens, cache de build e
+restos de obra de nome aleatório). Sessão do WhatsApp salva em volumes: re-rodar é seguro;
+`-Reset` limpa e reinstala tudo (mantém a IA) e
 `-Clean` apaga tudo (sessão + modelos). Precisa de Docker Desktop e PC ligado enquanto usar.
 Depois de reiniciar o PC, tudo volta sozinho: o Docker abre com o Windows, os containers sobem e a
 URL nova do túnel sincroniza com o app automaticamente. Só não use "Quit Docker Desktop" na bandeja
